@@ -1,0 +1,302 @@
+// schema.prisma — Brand Ship CI
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  SUPPLIER
+  INFLUENCER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum TransactionType {
+  SALE_EARNING
+  REFERRAL_BONUS
+  WITHDRAWAL
+  PLATFORM_FEE
+  SUPPLIER_EARNING
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  phone          String   @unique
+  email          String?  @unique
+  password_hash  String
+  role           Role     @default(INFLUENCER)
+  avatar_url     String?
+  wallet_balance Float    @default(0)
+  is_active      Boolean  @default(true)
+  referral_code  String   @unique @default(cuid())
+
+  // Parrainage (relation réflexive 1 niveau)
+  referrer_id    String?
+  referrer       User?    @relation("Referrals", fields: [referrer_id], references: [id])
+  referrals      User[]   @relation("Referrals")
+
+  // Relations
+  products       Product[]
+  stores         Store[]
+  transactions   Transaction[]
+  withdrawals    Withdrawal[]
+  notifications  Notification[]
+
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@index([role])
+  @@index([referrer_id])
+}
+
+// ─────────────────────────────────────────────
+// CATEGORY
+// ─────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  icon        String?
+  image_url   String?
+  is_active   Boolean   @default(true)
+  products    Product[]
+
+  created_at  DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT
+// ─────────────────────────────────────────────
+
+model Product {
+  id            String   @id @default(cuid())
+  supplier_id   String
+  supplier      User     @relation(fields: [supplier_id], references: [id])
+  category_id   String
+  category      Category @relation(fields: [category_id], references: [id])
+
+  title         String
+  slug          String   @unique
+  description   String
+  base_price    Float    // Prix plancher fournisseur (FCFA)
+  images        String[] // URLs Cloudinary (.webp)
+  stock         Int      @default(0)
+  weight_kg     Float?
+  is_active     Boolean  @default(true)
+  is_featured   Boolean  @default(false)
+
+  // Relations
+  store_products StoreProduct[]
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([supplier_id])
+  @@index([category_id])
+  @@index([is_active])
+}
+
+// ─────────────────────────────────────────────
+// STORE (Boutique de l'influenceur)
+// ─────────────────────────────────────────────
+
+model Store {
+  id              String   @id @default(cuid())
+  influencer_id   String
+  influencer      User     @relation(fields: [influencer_id], references: [id])
+
+  name            String
+  slug            String   @unique
+  description     String?
+  logo_url        String?
+  banner_url      String?
+  whatsapp_number String?
+  is_active       Boolean  @default(true)
+
+  // Relations
+  store_products  StoreProduct[]
+  orders          Order[]
+
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([influencer_id])
+}
+
+// ─────────────────────────────────────────────
+// STORE PRODUCT (Produit dans la boutique influenceur)
+// ─────────────────────────────────────────────
+
+model StoreProduct {
+  id              String   @id @default(cuid())
+  store_id        String
+  store           Store    @relation(fields: [store_id], references: [id])
+  influencer_id   String
+  influencer      User     @relation(fields: [influencer_id], references: [id])
+  product_id      String
+  product         Product  @relation(fields: [product_id], references: [id])
+
+  desired_price   Float    // Prix fixé par l'influenceur
+  // final_price = desired_price + 700 FCFA (frais de traitement, calculé automatiquement)
+  final_price     Float    // desired_price + 700 FCFA — prix affiché au client
+  is_active       Boolean  @default(true)
+  custom_note     String?  // Description personnalisée de l'influenceur
+
+  // Relations
+  orders          Order[]
+
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@unique([store_id, product_id])
+  @@index([influencer_id])
+  @@index([product_id])
+}
+
+// ─────────────────────────────────────────────
+// ORDER
+// ─────────────────────────────────────────────
+
+model Order {
+  id               String      @id @default(cuid())
+  store_id         String
+  store            Store       @relation(fields: [store_id], references: [id])
+  store_product_id String
+  store_product    StoreProduct @relation(fields: [store_product_id], references: [id])
+
+  // Informations client
+  client_name      String
+  client_phone     String
+  client_address   String?
+  delivery_city    String
+  delivery_area    String
+  delivery_fee     Float    @default(0)
+
+  // Montants
+  quantity         Int      @default(1)
+  unit_price       Float    // = final_price au moment de la commande (snapshot)
+  total_amount     Float    // unit_price * quantity + delivery_fee
+
+  // Décomposition financière (snapshot au moment de la validation)
+  base_price_snapshot    Float?  // Prix plancher fournisseur
+  desired_price_snapshot Float?  // Prix influenceur
+  processing_fee         Float   @default(700) // Frais de traitement plateforme
+  platform_fee           Float?  // Commission plateforme totale collectée
+  supplier_earning       Float?  // Gains nets fournisseur
+  influencer_earning     Float?  // Gains nets influenceur
+  referral_bonus         Float?  // Bonus parrain (si applicable)
+
+  status           OrderStatus @default(PENDING)
+  notes            String?     // Notes de livraison
+  cancelled_reason String?
+
+  // Relations
+  transactions     Transaction[]
+
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@index([store_id])
+  @@index([store_product_id])
+  @@index([status])
+  @@index([client_phone])
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTION (Historique financier strict)
+// ─────────────────────────────────────────────
+
+model Transaction {
+  id          String          @id @default(cuid())
+  user_id     String
+  user        User            @relation(fields: [user_id], references: [id])
+  order_id    String?
+  order       Order?          @relation(fields: [order_id], references: [id])
+
+  amount      Float
+  type        TransactionType
+  description String?
+  metadata    Json?           // Données additionnelles (ex: parrain_id, etc.)
+
+  created_at  DateTime        @default(now())
+
+  @@index([user_id])
+  @@index([order_id])
+  @@index([type])
+  @@index([created_at])
+}
+
+// ─────────────────────────────────────────────
+// WITHDRAWAL (Demandes de retrait)
+// ─────────────────────────────────────────────
+
+model Withdrawal {
+  id              String           @id @default(cuid())
+  user_id         String
+  user            User             @relation(fields: [user_id], references: [id])
+
+  amount          Float
+  mobile_money    String           // Numéro MTN/Orange Money
+  operator        String           // "MTN" | "ORANGE" | "WAVE"
+  status          WithdrawalStatus @default(PENDING)
+  processed_by    String?          // Admin ID
+  processed_at    DateTime?
+  rejection_note  String?
+
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  @@index([user_id])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATION
+// ─────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id])
+
+  title       String
+  body        String
+  type        String   // "ORDER", "PAYMENT", "WITHDRAWAL", "SYSTEM"
+  is_read     Boolean  @default(false)
+  data        Json?    // Données contextuelles
+
+  created_at  DateTime @default(now())
+
+  @@index([user_id])
+  @@index([is_read])
+}
