@@ -4,27 +4,53 @@ import { useState } from "react";
 import Link from "next/link";
 
 export default function HomePage() {
-  const [activeCategory, setActiveCategory] = useState(0);
+  const [activeAdTab, setActiveAdTab] = useState<"products" | "stores">("products");
 
-  const categories = [
+  // Données de l'Espace Publicitaire (Maquette Droite)
+  const adProducts = [
     {
-      title: "Mode & Accessoires",
-      desc: "Boubous modernes, sacs de luxe et bijoux tendance à Abidjan.",
-      emoji: "👗",
-      color: "from-amber-400 to-orange-500",
+      id: 1,
+      name: "Mode & Accessoires",
+      desc: "Choisissez les produits du catalogue et fixez votre prix de vente.",
+      image: "👗",
+      tag: "Remise 20%",
+      bgGradient: "from-orange-100 to-orange-200"
     },
     {
-      title: "Électronique",
-      desc: "Smartphones, écouteurs sans fil et gadgets de haute qualité.",
-      emoji: "📱",
-      color: "from-blue-500 to-indigo-600",
+      id: 2,
+      name: "Électronique",
+      desc: "Vendez les produits de fournisseurs locaux ou internationaux.",
+      image: "📱",
+      tag: "Livraison Gratuite",
+      bgGradient: "from-blue-100 to-blue-200"
     },
     {
-      title: "Beauté & Cosmétiques",
-      desc: "Soins premium, parfums et maquillage de grandes marques.",
-      emoji: "✨",
-      color: "from-rose-400 to-pink-600",
+      id: 3,
+      name: "Beauté",
+      desc: "Recevez vos gains de vente et de parrainage instantanément.",
+      image: "✨",
+      tag: "Top Boutique",
+      bgGradient: "from-pink-100 to-pink-200"
+    }
+  ];
+
+  const adStores = [
+    {
+      id: 1,
+      name: "Abidjan Grossiste Choc",
+      desc: "Spécialiste Mode & Prêt-à-porter à Adjamé. Plus de 500 articles disponibles.",
+      image: "🏪",
+      tag: "Vérifié",
+      bgGradient: "from-amber-100 to-amber-200"
     },
+    {
+      id: 2,
+      name: "Koumassi Tech Hub",
+      desc: "Importateur direct d'électronique, smartphones et accessoires connectés.",
+      image: "⚡",
+      tag: "Premium",
+      bgGradient: "from-indigo-100 to-indigo-200"
+    }
   ];
 
   return (
@@ -34,11 +60,11 @@ export default function HomePage() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#071020]/80 backdrop-blur-md border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
-              <span className="text-gray-900 font-black text-sm">BS</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-400 flex items-center justify-center">
+              <span className="text-gray-900 font-black text-xs">⚡</span>
             </div>
-            <span className="font-black text-xl tracking-tight">
-              Brand Ship <span className="text-amber-400">CI</span>
+            <span className="font-black text-lg tracking-tight">
+              Brand <span className="text-amber-400">Ship</span> <span className="text-xs text-white/40 px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 ml-1">CI</span>
             </span>
           </div>
 
@@ -51,131 +77,212 @@ export default function HomePage() {
             </Link>
             <Link 
               href="/register" 
-              className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition shadow-lg shadow-amber-400/20"
+              className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-amber-400/20"
             >
-              Créer mon compte
+              Commencez gratuitement &gt;
             </Link>
           </div>
         </div>
       </header>
 
-      {/* --- SECTION HERO PRINCIPALE --- */}
-      <section className="relative pt-32 pb-20 px-6 overflow-hidden min-h-[90vh] flex items-center">
-        {/* Effets de lumière en arrière-plan */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-blue-600/10 blur-[130px] -z-10 animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-amber-500/10 blur-[100px] -z-10" />
-        <div className="absolute inset-0 opacity-[0.02] -z-20" style={{ backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-
-        <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+      {/* --- STRUCTURE PRINCIPALE (Inspirée de la capture d'écran) --- */}
+      <main className="pt-16">
+        
+        {/* SECTION HERO ET ENCADRÉ PUBLICITAIRE (Double colonne) */}
+        <section className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           
-          {/* Texte d'accroche (Gauche) */}
-          <div className="lg:col-span-7 space-y-6 text-left">
-            <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/20 rounded-full px-4 py-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">Plateforme E-commerce Social #1</span>
+          {/* Colonne Gauche (Sombre - Hero Text) */}
+          <div className="lg:col-span-5 flex flex-col justify-center space-y-8 pr-4">
+            <div className="space-y-4">
+              <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-[1.15]">
+                Vendez sans stock.<br />
+                <span className="text-amber-400">Gagnez avec votre réseau.</span>
+              </h1>
+              <p className="text-white/60 text-sm leading-relaxed max-w-md">
+                La 1ère plateforme de Commerce Social en Côte d'Ivoire. Connectez fournisseurs et influenceurs pour vendre partout.
+              </p>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-[1.1]">
-              Vendez sans stock. <br />
-              <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-                Gagnez avec votre réseau.
-              </span>
-            </h1>
-
-            <p className="text-white/60 text-base sm:text-lg max-w-xl leading-relaxed">
-              La 1ère plateforme en Côte d'Ivoire qui connecte directement les grossistes d'Abidjan avec les influenceurs et vendeurs en ligne. Vendez partout, la logistique est gérée.
-            </p>
-
-            <div className="flex flex-wrap gap-4 pt-2">
+            <div className="flex items-center gap-4">
               <Link 
                 href="/register" 
-                className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-black text-sm px-8 py-4 rounded-2xl transition duration-300 shadow-xl shadow-amber-400/20 transform hover:-translate-y-0.5"
+                className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-black text-sm px-6 py-3.5 rounded-xl transition shadow-lg shadow-amber-400/20"
               >
-                Commencer gratuitement →
+                Commencez gratuitement &gt;
+              </Link>
+              <Link 
+                href="/login" 
+                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-sm px-6 py-3.5 rounded-xl transition"
+              >
+                Se connecter
               </Link>
             </div>
 
-            {/* Statistiques épurées */}
-            <div className="pt-8 grid grid-cols-3 gap-6 max-w-md border-t border-white/5">
+            {/* Stats en ligne horizontale */}
+            <div className="pt-6 grid grid-cols-3 gap-4 border-t border-white/5 text-left">
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-white">2K+</div>
-                <div className="text-white/40 text-xs mt-0.5">Vendeurs actifs</div>
+                <div className="text-xl font-black text-white">2K+</div>
+                <div className="text-white/40 text-[11px]">Vendeurs actifs</div>
               </div>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-white">500+</div>
-                <div className="text-white/40 text-xs mt-0.5">Produits certifiés</div>
+                <div className="text-xl font-black text-white">Plus de 500</div>
+                <div className="text-white/40 text-[11px]">Produits</div>
               </div>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-white">98%</div>
-                <div className="text-white/40 text-xs mt-0.5">Livraisons réussies</div>
+                <div className="text-xl font-black text-white">98%</div>
+                <div className="text-white/40 text-[11px]">Livraison OK</div>
               </div>
             </div>
           </div>
 
-          {/* Composant Visuel Interactif (Droite) */}
-          <div className="lg:col-span-5 flex justify-center">
-            <div className="w-full max-w-sm bg-[#0d1f3c] border border-white/10 rounded-3xl p-6 shadow-2xl relative">
-              <div className="absolute -top-3 left-6 bg-gradient-to-r from-amber-400 to-orange-500 text-gray-900 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
-                Aperçu Catalogue
-              </div>
-              
-              <div className={`w-full rounded-2xl bg-gradient-to-br ${categories[activeCategory].color} p-6 mb-6 transition-all duration-500 text-left`}>
-                <span className="text-4xl">{categories[activeCategory].emoji}</span>
-                <h3 className="text-xl font-black mt-4 mb-1">{categories[activeCategory].title}</h3>
-                <p className="text-white/80 text-xs leading-relaxed">{categories[activeCategory].desc}</p>
+          {/* Colonne Droite (Bleu Lumineux - L'Espace Publicitaire Interactif de l'image) */}
+          <div className="lg:col-span-7 bg-gradient-to-b from-[#3b82f6] to-[#1d4ed8] rounded-[2rem] p-6 sm:p-8 shadow-2xl flex flex-col justify-between text-gray-900">
+            
+            {/* Sous-Section : Offres Spéciales */}
+            <div>
+              <div className="text-white font-bold text-sm mb-3 tracking-wide">Offres Spéciales</div>
+              <div className="flex flex-wrap gap-2 mb-6">
+                <span className="bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1">📦 Livraison Gratuite</span>
+                <span className="bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1">🏷️ Remise 20%</span>
+                <span className="bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1">🛵 Livreur papsletx</span>
               </div>
 
-              <div className="space-y-2">
-                {categories.map((cat, index) => (
+              {/* Titre & Sélecteur d'Onglets de Publicité */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/20 pb-4 mb-6">
+                <h2 className="text-white font-black text-xl tracking-tight">Onglet de Publicité</h2>
+                
+                <div className="bg-[#071020]/40 p-1 rounded-xl inline-flex self-start sm:self-auto">
                   <button
-                    key={index}
-                    onClick={() => setActiveCategory(index)}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-between transition-all ${
-                      index === activeCategory
-                        ? "bg-white/10 text-white border border-white/10"
-                        : "text-white/50 hover:bg-white/5 hover:text-white"
+                    onClick={() => setActiveAdTab("products")}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      activeAdTab === "products" ? "bg-white text-gray-900 shadow" : "text-white/70 hover:text-white"
                     }`}
                   >
-                    <span>{cat.title}</span>
-                    <span>{index === activeCategory ? "🔥" : "→"}</span>
+                    Produits Sponsorisés
                   </button>
-                ))}
+                  <button
+                    onClick={() => setActiveAdTab("stores")}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      activeAdTab === "stores" ? "bg-white text-gray-900 shadow" : "text-white/70 hover:text-white"
+                    }`}
+                  >
+                    Boutiques à la Une
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenu de la zone publicitaire */}
+              {activeAdTab === "products" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {adProducts.map((item) => (
+                    <div key={item.id} className="bg-white rounded-2xl p-4 flex flex-col justify-between shadow-lg border border-white/10">
+                      <div>
+                        <div className={`w-full aspect-[4/3] rounded-xl bg-gradient-to-br ${item.bgGradient} flex items-center justify-center text-4xl mb-3`}>
+                          {item.image}
+                        </div>
+                        <h3 className="font-black text-sm text-gray-900 mb-1">{item.name}</h3>
+                        <p className="text-gray-500 text-[11px] leading-tight mb-4">{item.desc}</p>
+                      </div>
+                      <Link href="/register" className="w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-900 text-xs font-bold py-2 rounded-lg transition">
+                        Voir le Produit
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {adStores.map((store) => (
+                    <div key={store.id} className="bg-white rounded-2xl p-5 flex flex-col justify-between shadow-lg">
+                      <div className="flex items-start gap-4">
+                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${store.bgGradient} flex items-center justify-center text-2xl shrink-0`}>
+                          {store.image}
+                        </div>
+                        <div>
+                          <span className="bg-blue-600/10 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">{store.tag}</span>
+                          <h3 className="font-black text-base text-gray-900 mt-1">{store.name}</h3>
+                          <p className="text-gray-500 text-xs mt-1 leading-normal">{store.desc}</p>
+                        </div>
+                      </div>
+                      <Link href="/register" className="w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-900 text-xs font-bold py-2 mt-4 rounded-lg transition">
+                        Visiter la Boutique
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Pagination / Dots UI */}
+            <div className="flex justify-center items-center gap-1.5 pt-6">
+              <span className="w-6 h-1 rounded-full bg-white" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+            </div>
+
+          </div>
+        </section>
+
+        {/* --- SECTION INFÉRIEURE : COMMENT ÇA MARCHE ? (Fond blanc de la maquette) --- */}
+        <section className="bg-white text-gray-900 py-20 px-6 border-t border-gray-100">
+          <div className="max-w-4xl mx-auto">
+            
+            <div className="text-center space-y-2 mb-12">
+              <h2 className="text-3xl font-black tracking-tight">Comment ça marche ?</h2>
+              <p className="text-gray-400 text-sm">3 étapes simples pour commencer à vendre</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Étape 1 */}
+              <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl space-y-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  🏠
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Étape 01</div>
+                  <h3 className="font-black text-sm text-gray-900 mb-1">Créez votre boutique</h3>
+                  <p className="text-gray-500 text-xs leading-relaxed">
+                    Choisissez les produits du catalogue et fixez votre prix de vente. Votre boutique est prête en 1 clic.
+                  </p>
+                </div>
+              </div>
+
+              {/* Étape 2 */}
+              <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl space-y-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  📋
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Étape 02</div>
+                  <h3 className="font-black text-sm text-gray-900 mb-1">Sélectionnez vos produits</h3>
+                  <p className="text-gray-500 text-xs leading-relaxed">
+                    Parcourez notre catalogue collaboratif et choisissez vos produits favoris à pousser sur vos réseaux.
+                  </p>
+                </div>
+              </div>
+
+              {/* Étape 3 */}
+              <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl space-y-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  🚀
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Étape 03</div>
+                  <h3 className="font-black text-sm text-gray-900 mb-1">Commencez à vendre</h3>
+                  <p className="text-gray-500 text-xs leading-relaxed">
+                    Partagez vos liens, nous gérons la livraison à Abidjan et partout en Côte d'Ivoire, puis encaissez directement l'argent.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-        </div>
-      </section>
-
-      {/* --- SECTION DESCRIPTIVE RAPIDE --- */}
-      <section className="bg-[#0b162a] py-20 px-6 border-t border-white/5">
-        <div className="max-w-4xl mx-auto text-center space-y-4">
-          <h2 className="text-2xl sm:text-3xl font-black">Comment fonctionne le Brandshipping ?</h2>
-          <p className="text-white/50 text-sm max-w-xl mx-auto">Une méthode simplifiée en 3 étapes pour lancer votre commerce en ligne en Côte d'Ivoire sans investir dans un stock de départ.</p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-10 text-left">
-            <div className="bg-[#071020] p-6 rounded-2xl border border-white/5">
-              <div className="text-amber-400 font-bold text-xs mb-2">ÉTAPES 01</div>
-              <h4 className="font-bold text-sm mb-1">Choisissez vos produits</h4>
-              <p className="text-white/50 text-xs">Sélectionnez les articles des grossistes partenaires sur notre plateforme.</p>
-            </div>
-            <div className="bg-[#071020] p-6 rounded-2xl border border-white/5">
-              <div className="text-amber-400 font-bold text-xs mb-2">ÉTAPES 02</div>
-              <h4 className="font-bold text-sm mb-1">Partagez vos liens</h4>
-              <p className="text-white/50 text-xs">Proposez-les à vos abonnés ou clients sur WhatsApp, TikTok et Instagram.</p>
-            </div>
-            <div className="bg-[#071020] p-6 rounded-2xl border border-white/5">
-              <div className="text-amber-400 font-bold text-xs mb-2">ÉTAPES 03</div>
-              <h4 className="font-bold text-sm mb-1">Encassez vos gains</h4>
-              <p className="text-white/50 text-xs">Nous livrons le client à Abidjan et vous recevez vos profits par Mobile Money.</p>
-            </div>
           </div>
-        </div>
-      </section>
+        </section>
+
+      </main>
 
       {/* --- FOOTER --- */}
-      <footer className="py-8 text-center text-white/30 text-xs border-t border-white/5">
-        <p>© 2026 Brand Ship CI · Fait pour le commerce de Côte d'Ivoire</p>
+      <footer className="py-8 text-center text-white/30 text-xs border-t border-white/5 bg-[#071020]">
+        <p>© 2026 Brand Ship CI · Solution de Commerce de Confiance</p>
       </footer>
 
     </div>
