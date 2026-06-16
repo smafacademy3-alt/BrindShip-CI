@@ -44,9 +44,9 @@ export default function RegisterPage() {
     setTimeout(() => {
       setLoading(false);
       if (role === "influencer") {
-        router.push("/dashboard/influencer");
+       router.push("/influencer");
       } else {
-        router.push("/dashboard/vendor");
+       router.push("/merchant");
       }
     }, 1500);
   };
