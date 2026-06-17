@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 
-// Types pour l'UI
 interface Product {
   id: number;
   name: string;
@@ -11,315 +10,342 @@ interface Product {
   price: string;
   commission: string;
   image: string;
-  tag: string;
-  bgGradient: string;
+  category: "mode" | "tech" | "beaute";
 }
 
-// Données simulées (Base pour l'UI)
-const initialProducts: Product[] = [
-  { id: 1, name: "Robe Moderne Premium", store: "Abidjan Luxe Grossiste", price: "25 000 FCFA", commission: "+5 000 FCFA", image: "👗", tag: "Remise 20%", bgGradient: "from-orange-100 to-orange-200" },
-  { id: 2, name: "Électronique de Pointe", store: "Koumassi Tech Gadgets", price: "18 000 FCFA", commission: "+4 000 FCFA", image: "📱", tag: "Livraison Gratuite", bgGradient: "from-blue-100 to-blue-200" },
-  { id: 3, name: "Pack Teint Éclat Bio", store: "Cocody Glow Skin", price: "30 000 FCFA", commission: "+7 500 FCFA", image: "✨", tag: "Top Boutique", bgGradient: "from-pink-100 to-pink-200" },
+const ALL_PRODUCTS: Product[] = [
+  { id: 1, name: "Robe Moderne Premium", store: "Abidjan Luxe Grossiste", price: "25 000 FCFA", commission: "5 000 FCFA", image: "👗", category: "mode" },
+  { id: 2, name: "Électronique de Pointe", store: "Koumassi Tech Gadgets", price: "18 000 FCFA", commission: "4 000 FCFA", image: "📱", category: "tech" },
+  { id: 3, name: "Pack Teint Éclat Bio", store: "Cocody Glow Skin", price: "30 000 FCFA", commission: "7 500 FCFA", image: "✨", category: "beaute" },
+  { id: 4, name: "Chaussures Cuir Homme", store: "Treichville Chaussures Pro", price: "45 000 FCFA", commission: "9 000 FCFA", image: "👞", category: "mode" },
+  { id: 5, name: "Montre Connectée Pro", store: "Koumassi Tech Gadgets", price: "55 000 FCFA", commission: "11 000 FCFA", image: "⌚", category: "tech" },
+  { id: 6, name: "Crème Hydratante Shea", store: "Plateau Cosmetique", price: "15 000 FCFA", commission: "3 500 FCFA", image: "🧴", category: "beaute" },
 ];
 
-const allMarketplaceProducts: Product[] = [
-  ...initialProducts,
-  { id: 4, name: "Chaussures Cuir Homme", store: "Treichville Chaussures Pro", price: "45 000 FCFA", commission: "+9 000 FCFA", image: "👞", tag: "Populaire", bgGradient: "from-emerald-100 to-emerald-200" },
-  { id: 5, name: "Montre Connectée Pro", store: "Koumassi Tech Gadgets", price: "55 000 FCFA", commission: "+11 000 FCFA", image: "⌚", tag: "Nouveau", bgGradient: "from-amber-100 to-amber-200" },
-  { id: 6, name: "Tablette Éducative Enfant", store: "Plateau Digital Kids", price: "75 000 FCFA", commission: "+15 000 FCFA", image: "👶", tag: "Recommandé", bgGradient: "from-rose-100 to-rose-200" },
-];
+export default function PremiumInfluencerDashboard() {
+  const [activeTab, setActiveTab] = useState<"dashboard" | "marketplace" | "gains" | "profil">("dashboard");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [marketFilter, setMarketFilter] = useState<"all" | "mode" | "tech" | "beaute">("all");
+  
+  // États financiers
+  const [momoNumber, setMomoNumber] = useState("");
+  const [momoProvider, setMomoProvider] = useState<"wave" | "orange" | "mtn" | "">("");
 
-export default function InfluencerDashboard() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "boutique" | "paie" | "profil">("dashboard");
-  const [selectedProductLink, setSelectedProductLink] = useState<Product | null>(null);
-  const [mobileMoneyNumber, setMobileMoneyNumber] = useState("");
-  const [mobileMoneyProvider, setMobileMoneyProvider] = useState<"wave" | "orange" | "mtn" | "">("");
+  const handleCopyLink = (id: number) => {
+    navigator.clipboard.writeText(`https://brandship.ci/share/${id}?ref=marie_crea`);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
-  // Génération de lien simulé
-  const generateSimulatedLink = (id: number) => `https://bs.ci/crea/${id}?ref=marie_crea_ci`;
+  const filteredProducts = marketFilter === "all" 
+    ? ALL_PRODUCTS 
+    : ALL_PRODUCTS.filter(p => p.category === marketFilter);
 
   return (
-    <div className="min-h-screen bg-[#071020] text-white font-sans antialiased selection:bg-blue-400 selection:text-gray-900 pb-20 relative">
+    <div className="min-h-screen bg-[#070b13] text-[#f8fafc] font-sans antialiased selection:bg-blue-500/30 selection:text-white">
       
-      {/* --- 1. HEADER (Identique à image_4.png) --- */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-[#071020]/80 backdrop-blur-md border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">
-              ✨
-            </div>
-            <span className="font-black text-lg tracking-tight">
-              Espace <span className="text-blue-400">Influenceur</span> <span className="text-xs text-white/40 px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 ml-1">CI</span>
-            </span>
+      {/* --- HEADER ÉPURÉ & BURGER --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#070b13]/80 backdrop-blur-xl border-b border-white/[0.04] px-4 sm:px-8 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-sm shadow-md shadow-blue-500/10">
+            ✨
           </div>
-          <Link 
-            href="/" 
-            className="text-sm font-medium text-white/80 hover:text-white transition px-4 py-2 rounded-xl hover:bg-white/5 border border-white/10"
-          >
+          <span className="font-semibold text-sm tracking-tight">
+            BrandShip <span className="text-blue-400 font-light">Influencer</span>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Link href="/" className="hidden sm:inline-block text-xs text-white/50 hover:text-white transition-colors">
             Retour au site
           </Link>
+          
+          {/* Bouton Burger Minimaliste */}
+          <button 
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="w-10 h-10 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05] transition-all relative z-50 focus:outline-none"
+            aria-label="Menu"
+          >
+            <span className={`w-5 h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "rotate-45 translate-y-2" : ""}`}></span>
+            <span className={`w-5 h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "opacity-0" : ""}`}></span>
+            <span className={`w-5 h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "-rotate-45 -translate-y-2" : ""}`}></span>
+          </button>
         </div>
       </header>
 
-      {/* --- 2. CONTENU PRINCIPAL DYNAMIQUE (Padding top pour header) --- */}
-      <main className="pt-20 px-6 max-w-7xl mx-auto">
+      {/* --- DOUBLE STRUCTURE : TIROIR MENU BURGER OVERLAY --- */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-40 bg-[#070b13]/95 backdrop-blur-2xl flex flex-col justify-center px-8 space-y-6 animate-fadeIn">
+          <div className="flex flex-col space-y-6 text-2xl font-light tracking-wide max-w-sm mx-auto w-full">
+            <button 
+              onClick={() => { setActiveTab("dashboard"); setIsMenuOpen(false); }}
+              className={`text-left py-2 border-b border-white/[0.03] transition-colors ${activeTab === "dashboard" ? "text-blue-400 font-normal" : "text-white/60 hover:text-white"}`}
+            >
+              📊 Vue d'ensemble
+            </button>
+            <button 
+              onClick={() => { setActiveTab("marketplace"); setIsMenuOpen(false); }}
+              className={`text-left py-2 border-b border-white/[0.03] transition-colors ${activeTab === "marketplace" ? "text-blue-400 font-normal" : "text-white/60 hover:text-white"}`}
+            >
+              🛍️ Marketplace Grossistes
+            </button>
+            <button 
+              onClick={() => { setActiveTab("gains"); setIsMenuOpen(false); }}
+              className={`text-left py-2 border-b border-white/[0.03] transition-colors ${activeTab === "gains" ? "text-blue-400 font-normal" : "text-white/60 hover:text-white"}`}
+            >
+              💰 Retraits & Commissions
+            </button>
+            <button 
+              onClick={() => { setActiveTab("profil"); setIsMenuOpen(false); }}
+              className={`text-left py-2 border-b border-white/[0.03] transition-colors ${activeTab === "profil" ? "text-blue-400 font-normal" : "text-white/60 hover:text-white"}`}
+            >
+              👤 Profil & Réseaux
+            </button>
+            <Link href="/" className="text-left text-sm text-white/30 pt-4 hover:text-white transition-colors">
+              ➔ Quitter l'espace
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* --- CONTENU PRINCIPAL --- */}
+      <main className="pt-24 px-4 sm:px-8 pb-12 max-w-5xl mx-auto w-full min-h-screen">
         
-        {/* --- ONGLET : TABLEAU DE BORD (Inspiré de image_4.png, avec infos en plus) --- */}
+        {/* ==========================================
+            TAB 1 : TABLEAU DE BORD ACCUEIL
+            ========================================== */}
         {activeTab === "dashboard" && (
-          <section className="space-y-10">
-            {/* Bannière de Bienvenue */}
-            <div className="bg-gradient-to-r from-blue-500/20 to-indigo-600/10 border border-blue-400/20 rounded-2xl p-6">
-              <h1 className="text-2xl font-black text-white">Prêt à créer de l'influence ? 🚀</h1>
-              <p className="text-white/70 text-xs mt-1">Parcourez les catalogues, récupérez vos liens personnalisés et gagnez de l'argent. Brand Ship CI vous connecte aux meilleurs grossistes.</p>
+          <div className="space-y-8 animate-fadeIn">
+            {/* Message d'accueil ultra-clean */}
+            <div className="border border-white/[0.03] bg-gradient-to-b from-white/[0.02] to-transparent rounded-2xl p-6">
+              <span className="text-xs text-blue-400 uppercase tracking-widest font-mono">Statut du compte : Actif</span>
+              <h1 className="text-xl sm:text-2xl font-light mt-1 text-white">Ravi de vous revoir, Créateur.</h1>
+              <p className="text-white/40 text-xs mt-2 max-w-xl">Suivez vos performances en direct. Partagez vos liens uniques sur TikTok, Instagram ou WhatsApp pour générer des revenus automatisés.</p>
             </div>
 
-            {/* Grille de stats (Identique à image_4.png) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#0d1f3c] border border-white/5 p-5 rounded-2xl flex flex-col justify-between h-36">
-                <span className="text-white/40 text-[10px] uppercase font-bold tracking-wider">Clics Accumulés</span>
-                <span className="text-4xl font-black text-blue-400">12 450</span>
+            {/* Grille de statistiques minimaliste */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-[#0c1220]/40 border border-white/[0.03] rounded-xl p-5">
+                <p className="text-[10px] text-white/40 uppercase tracking-wider font-medium">Clics mesurés</p>
+                <p className="text-3xl font-light mt-2 text-blue-400">12 450</p>
               </div>
-              <div className="bg-[#0d1f3c] border border-white/5 p-5 rounded-2xl flex flex-col justify-between h-36">
-                <span className="text-white/40 text-[10px] uppercase font-bold tracking-wider">Ventes Générées</span>
-                <span className="text-4xl font-black text-emerald-400">32</span>
+              <div className="bg-[#0c1220]/40 border border-white/[0.03] rounded-xl p-5">
+                <p className="text-[10px] text-white/40 uppercase tracking-wider font-medium">Commandes passées</p>
+                <p className="text-3xl font-light mt-2 text-emerald-400">32</p>
               </div>
-              <div className="bg-[#0d1f3c] border border-white/5 p-5 rounded-2xl flex flex-col justify-between h-36 relative">
-                <span className="text-white/40 text-[10px] uppercase font-bold tracking-wider block">Commissions Gagnées</span>
-                <span className="text-4xl font-black text-amber-400 block mt-1 whitespace-nowrap">160 000 <span className="text-sm font-medium">FCFA</span></span>
+              <div className="bg-[#0c1220]/40 border border-white/[0.03] rounded-xl p-5">
+                <p className="text-[10px] text-white/40 uppercase tracking-wider font-medium">Fonds disponibles</p>
+                <p className="text-3xl font-light mt-2 text-amber-400">160 000 <span className="text-xs font-mono">FCFA</span></p>
               </div>
             </div>
 
-            {/* Produits Recommandés (Identique à image_4.png) */}
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Produits recommandés pour vos réseaux</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {initialProducts.map((product) => (
-                  <div key={product.id} className="bg-[#0d1f3c] border border-white/5 rounded-2xl p-5 hover:border-blue-500/30 transition-all flex items-center justify-between gap-4">
+            {/* Recommandations rapides */}
+            <div className="space-y-4 pt-4">
+              <h3 className="text-xs text-white/40 uppercase tracking-widest font-mono">Sélection Prioritaire</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ALL_PRODUCTS.slice(0, 2).map(product => (
+                  <div key={product.id} className="bg-[#0c1220]/20 border border-white/[0.03] rounded-xl p-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${product.bgGradient} flex items-center justify-center text-3xl`}>
-                        {product.image}
-                      </div>
+                      <div className="w-12 h-12 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-center text-2xl">{product.image}</div>
                       <div>
-                        <span className="bg-blue-600/10 text-blue-400 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">{product.tag}</span>
-                        <h4 className="font-bold text-xs text-white mt-1">{product.name}</h4>
-                        <p className="text-[10px] text-emerald-400 font-bold mt-0.5">Gain : {product.commission} / vente</p>
+                        <h4 className="text-xs font-medium text-white">{product.name}</h4>
+                        <p className="text-[11px] text-emerald-400 font-mono mt-0.5">+{product.commission} / vente</p>
                       </div>
                     </div>
                     <button 
-                      onClick={() => setSelectedProductLink(product)}
-                      className="bg-blue-500 hover:bg-blue-400 text-white font-bold text-[10px] px-3 py-2 rounded-lg transition shrink-0 flex items-center gap-1.5"
+                      onClick={() => handleCopyLink(product.id)}
+                      className="bg-white/5 hover:bg-white/10 text-white border border-white/10 text-[10px] px-3 py-2 rounded-lg transition-colors font-mono"
                     >
-                      🔗 Prendre mon Lien
+                      {copiedId === product.id ? "Copié ✓" : "Prendre"}
                     </button>
                   </div>
                 ))}
               </div>
             </div>
-          </section>
+          </div>
         )}
 
-        {/* --- ONGLET : BOUTIQUE / MARKETPLACE (Nouveau) --- */}
-        {activeTab === "boutique" && (
-          <section className="space-y-8">
-            <h2 className="text-xl font-black text-white">Marketplace de Produits Grossistes</h2>
-            
-            {/* Barre de recherche simulée */}
-            <div className="bg-[#0d1f3c] border border-white/5 p-4 rounded-xl flex items-center gap-3">
-              <span className="text-lg text-white/40">🔍</span>
-              <input type="text" placeholder="Rechercher un produit, un grossiste à Adjamé..." className="w-full bg-transparent text-sm focus:outline-none placeholder:text-white/30" />
+        {/* ==========================================
+            TAB 2 : MARKETPLACE DE PRODUITS
+            ========================================== */}
+        {activeTab === "marketplace" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.03] pb-4">
+              <div>
+                <h2 className="text-base font-medium">Catalogue Grossiste Affilié</h2>
+                <p className="text-xs text-white/40">Générez un lien d'affiliation instantané pour chaque produit.</p>
+              </div>
+              
+              {/* Filtres épurés */}
+              <div className="flex gap-2 overflow-x-auto pb-1 font-mono text-[10px]">
+                {(["all", "mode", "tech", "beaute"] as const).map(f => (
+                  <button 
+                    key={f}
+                    onClick={() => setMarketFilter(f)}
+                    className={`px-3 py-1.5 rounded-lg border transition-all uppercase ${marketFilter === f ? "border-blue-500 bg-blue-500/10 text-blue-400" : "border-white/[0.05] text-white/40"}`}
+                  >
+                    {f === "all" ? "Tout" : f}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {allMarketplaceProducts.map((product) => (
-                  <div key={product.id} className="bg-[#0d1f3c] border border-white/5 rounded-2xl p-5 hover:border-blue-500/30 transition-all flex flex-col justify-between gap-4 relative group">
-                    <span className="absolute top-4 right-4 bg-white/5 text-white/40 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">{product.tag}</span>
-                    <div className="flex flex-col gap-3">
-                      <div className={`w-full aspect-[4/3] rounded-xl bg-gradient-to-br ${product.bgGradient} flex items-center justify-center text-5xl mb-1`}>
-                        {product.image}
-                      </div>
-                      <h4 className="font-bold text-sm text-white">{product.name}</h4>
-                      <p className="text-[11px] text-white/50 leading-tight">Par : {product.store}</p>
+            {/* Grille Produits */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredProducts.map(product => (
+                <div key={product.id} className="bg-[#0c1220]/20 border border-white/[0.03] rounded-xl p-4 flex flex-col justify-between space-y-4">
+                  <div className="space-y-3">
+                    <div className="aspect-[4/3] w-full rounded-lg bg-white/[0.01] border border-white/[0.03] flex items-center justify-center text-4xl">
+                      {product.image}
                     </div>
-                    
-                    <div className="flex justify-between items-center border-t border-white/5 pt-3">
-                      <div className="text-left">
-                        <span className="text-white/40 text-[9px] uppercase font-bold">Prix</span>
-                        <div className="text-xs font-black text-white">{product.price}</div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-emerald-400 text-[9px] uppercase font-bold">Votre gain / vente</span>
-                        <div className="text-xs font-black text-emerald-400">{product.commission}</div>
-                      </div>
+                    <div>
+                      <span className="text-[9px] text-white/30 block tracking-wide font-mono uppercase">{product.store}</span>
+                      <h4 className="text-xs font-medium text-white mt-0.5">{product.name}</h4>
                     </div>
-
+                  </div>
+                  
+                  <div className="border-t border-white/[0.03] pt-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] text-white/30 block uppercase font-mono">Commission</span>
+                      <span className="text-xs font-semibold font-mono text-emerald-400">+{product.commission}</span>
+                    </div>
                     <button 
-                      onClick={() => setSelectedProductLink(product)}
-                      className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+                      onClick={() => setSelectedProduct(product)}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium px-3 py-2 rounded-lg transition-colors"
                     >
-                      🔗 Prendre mon Lien
+                      🔗 Partager
                     </button>
                   </div>
+                </div>
               ))}
             </div>
-          </section>
+          </div>
         )}
 
-        {/* --- ONGLET : PAIEMENTS (Nouveau) --- */}
-        {activeTab === "paie" && (
-          <section className="space-y-10">
-            <h2 className="text-xl font-black text-white">Espace Gains & Paiements</h2>
+        {/* ==========================================
+            TAB 3 : GESTION DES GAINS (FCFA)
+            ========================================== */}
+        {activeTab === "gains" && (
+          <div className="space-y-8 animate-fadeIn max-w-md mx-auto">
+            <div>
+              <h2 className="text-base font-medium">Retraits & Portefeuille</h2>
+              <p className="text-xs text-white/40">Configurez votre canal de réception Mobile Money local en Côte d'Ivoire.</p>
+            </div>
 
-            {/* Formulaire Mobile Money */}
-            <div className="bg-[#0d1f3c] border border-white/5 p-6 rounded-2xl space-y-4 max-w-lg mx-auto">
-              <h3 className="font-bold text-sm text-white">Configurer mon Paiement Mobile Money CI</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-white/60 text-[10px] font-bold uppercase mb-1">Numéro Mobile Money CI</label>
-                  <input 
-                    type="tel" 
-                    value={mobileMoneyNumber}
-                    onChange={(e) => setMobileMoneyNumber(e.target.value)}
-                    placeholder="Ex: 07 00 00 00 00" 
-                    className="w-full bg-[#071020] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-400" 
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-2">
-                  <button onClick={() => setMobileMoneyProvider("wave")} className={`p-2.5 rounded-lg border text-xs font-bold ${mobileMoneyProvider === "wave" ? "border-blue-400 bg-blue-400/10 text-blue-400" : "border-white/10 text-white/40"}`}>🌊 Wave</button>
-                  <button onClick={() => setMobileMoneyProvider("orange")} className={`p-2.5 rounded-lg border text-xs font-bold ${mobileMoneyProvider === "orange" ? "border-orange-400 bg-orange-400/10 text-orange-400" : "border-white/10 text-white/40"}`}>🍊 Orange</button>
-                  <button onClick={() => setMobileMoneyProvider("mtn")} className={`p-2.5 rounded-lg border text-xs font-bold ${mobileMoneyProvider === "mtn" ? "border-yellow-400 bg-yellow-400/10 text-yellow-400" : "border-white/10 text-white/40"}`}>💛 MTN</button>
+            {/* Formulaire de paiement épuré */}
+            <div className="bg-[#0c1220]/20 border border-white/[0.03] rounded-2xl p-6 space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-wider block">Numéro Mobile Money (CI)</label>
+                <input 
+                  type="tel"
+                  placeholder="Ex: 07 87 00 00 00"
+                  value={momoNumber}
+                  onChange={(e) => setMomoNumber(e.target.value)}
+                  className="w-full h-11 bg-[#070b13] border border-white/[0.05] focus:border-blue-500 rounded-xl px-4 text-xs text-white placeholder:text-white/20 focus:outline-none transition-colors font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono text-white/40 uppercase tracking-wider block">Opérateur Réseau</label>
+                <div className="grid grid-cols-3 gap-2 font-mono text-xs">
+                  <button onClick={() => setMomoProvider("wave")} className={`h-10 rounded-xl border transition-all ${momoProvider === "wave" ? "border-blue-400 bg-blue-400/10 text-blue-400" : "border-white/[0.05] text-white/30"}`}>Wave</button>
+                  <button onClick={() => setMomoProvider("orange")} className={`h-10 rounded-xl border transition-all ${momoProvider === "orange" ? "border-orange-400 bg-orange-400/10 text-orange-400" : "border-white/[0.05] text-white/30"}`}>Orange</button>
+                  <button onClick={() => setMomoProvider("mtn")} className={`h-10 rounded-xl border transition-all ${momoProvider === "mtn" ? "border-yellow-400 bg-yellow-400/10 text-yellow-400" : "border-white/[0.05] text-white/30"}`}>MTN</button>
                 </div>
               </div>
-              <button onClick={() => alert("Numéro de paiement enregistré !")} className="w-full bg-amber-400 hover:bg-amber-300 text-gray-900 font-black text-xs py-3 rounded-xl transition">
-                Sauvegarder mon mode de paiement
+
+              <button 
+                onClick={() => alert("Paramètres de paiement mis à jour")}
+                className="w-full h-11 bg-white hover:bg-white/90 text-gray-950 font-medium text-xs rounded-xl transition-all shadow-md shadow-white/5"
+              >
+                Sauvegarder le mode de paiement
               </button>
             </div>
 
-            {/* Historique simulé */}
-            <div className="space-y-4">
-              <h4 className="font-bold text-xs text-white">Historique des paiements de commissions reçus</h4>
-              <div className="bg-[#0d1f3c] border border-white/5 rounded-xl divide-y divide-white/5 text-xs">
-                <div className="p-4 flex justify-between items-center text-emerald-400 font-bold"><span>+50 000 FCFA</span> <span>Transfert Wave (Aujourd'hui)</span> <span className="text-white/40 text-[10px]">16 Juin 2026</span></div>
-                <div className="p-4 flex justify-between items-center text-emerald-400 font-bold"><span>+110 000 FCFA</span> <span>Transfert Wave</span> <span className="text-white/40 text-[10px]">10 Juin 2026</span></div>
+            {/* Liste historique épurée */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Flux des Retraits Validés</h4>
+              <div className="bg-[#0c1220]/10 border border-white/[0.03] rounded-xl divide-y divide-white/[0.03] text-xs font-mono">
+                <div className="p-4 flex justify-between items-center"><span className="text-emerald-400">+50 000 FCFA</span> <span className="text-white/30 text-[10px]">16 Juin 2026</span></div>
+                <div className="p-4 flex justify-between items-center"><span className="text-emerald-400">+110 000 FCFA</span> <span className="text-white/30 text-[10px]">10 Juin 2026</span></div>
               </div>
             </div>
-          </section>
+          </div>
         )}
 
-        {/* --- ONGLET : PROFIL (Nouveau) --- */}
+        {/* ==========================================
+            TAB 4 : PROFIL & RESEAUX
+            ========================================== */}
         {activeTab === "profil" && (
-          <section className="text-center max-w-lg mx-auto space-y-6 pt-6 pb-12">
-            <div className="w-20 h-20 rounded-full bg-blue-500/10 border-4 border-blue-400 flex items-center justify-center text-3xl font-black text-blue-400 mx-auto">M</div>
-            <div className="space-y-1">
-              <h2 className="text-xl font-black text-white">Marie Créatrice CI</h2>
-              <p className="text-xs text-white/60">marie@createur-ci.com · Abidjan, Côte d'Ivoire</p>
+          <div className="space-y-6 animate-fadeIn max-w-sm mx-auto text-center pt-4">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-light text-xl flex items-center justify-center mx-auto shadow-xl shadow-blue-500/10">
+              M
             </div>
-            <button onClick={() => alert("Modifications sauvegardées !")} className="bg-[#0d1f3c] hover:bg-[#13284f] border border-white/10 text-white font-bold text-xs px-6 py-2 rounded-xl transition">
-              Modifier mes paramètres de profil
-            </button>
-          </section>
+            <div>
+              <h2 className="text-base font-medium">Marie Créatrice CI</h2>
+              <p className="text-xs text-white/40 font-mono mt-0.5">ID Affilié : #94827</p>
+            </div>
+
+            <div className="bg-[#0c1220]/20 border border-white/[0.03] rounded-xl p-4 text-left space-y-3 text-xs">
+              <div className="flex justify-between border-b border-white/[0.03] pb-2 text-white/50"><span>E-mail</span> <span className="text-white">marie@createur-ci.com</span></div>
+              <div className="flex justify-between border-b border-white/[0.03] pb-2 text-white/50"><span>Région</span> <span className="text-white">Abidjan, CI</span></div>
+              <div className="flex justify-between text-white/50"><span>Taux fixe</span> <span className="text-emerald-400 font-mono">100% Direct</span></div>
+            </div>
+          </div>
         )}
       </main>
 
       {/* =========================================================
-          🔥 MODAL PREMUM : GESTIONNAIRE DE LIEN & SHARE HUB
+          🔥 OVERLAY MODAL ÉPURÉ : LIEN & SHARE HUB
           ========================================================= */}
-      {selectedProductLink && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center transition-opacity animate-fadeIn">
-          <div className="w-full max-w-lg bg-[#0d1f3c] border-t border-white/10 rounded-t-[2.5rem] p-6 sm:p-8 overflow-y-auto max-h-[85vh] flex flex-col justify-between shadow-2xl text-white">
-            
-            {/* Haut de page & fermeture */}
-            <div>
-              <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-                <div>
-                  <span className="text-[10px] bg-blue-400/10 text-blue-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Lien d'Affiliation</span>
-                  <h2 className="text-lg font-black mt-1">Générer & Partager</h2>
-                </div>
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 bg-[#070b13]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-md bg-[#0c1220] border border-white/[0.05] rounded-2xl p-6 space-y-5 shadow-2xl text-white">
+            <div className="flex items-center justify-between border-b border-white/[0.04] pb-3">
+              <span className="text-[10px] font-mono tracking-widest text-blue-400 uppercase">Partage Tracker</span>
+              <button onClick={() => setSelectedProduct(null)} className="text-white/40 hover:text-white text-xs">Fermer ✕</button>
+            </div>
+
+            <div className="flex items-center gap-3 bg-[#070b13]/40 p-3 rounded-xl border border-white/[0.03]">
+              <span className="text-3xl">{selectedProduct.image}</span>
+              <div>
+                <h4 className="text-xs font-medium">{selectedProduct.name}</h4>
+                <p className="text-[10px] text-emerald-400 font-mono mt-0.5">Gain net : +{selectedProduct.commission} / vente</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Lien commercial unique</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={`https://brandship.ci/share/${selectedProduct.id}?ref=marie_crea`}
+                  className="w-full h-10 bg-[#070b13] border border-white/[0.05] rounded-lg px-3 text-[11px] text-white/70 font-mono focus:outline-none"
+                  readOnly
+                />
                 <button 
-                  onClick={() => setSelectedProductLink(null)}
-                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/60 hover:text-white transition"
+                  onClick={() => handleCopyLink(selectedProduct.id)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs px-4 rounded-lg transition-colors shrink-0"
                 >
-                  ✕
+                  {copiedId === selectedProduct.id ? "Copié !" : "Copier"}
                 </button>
               </div>
-
-              {/* Rappel du produit sélectionné */}
-              <div className="bg-[#071020] rounded-2xl p-4 border border-white/5 space-y-2 mb-6 flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${selectedProductLink.bgGradient} flex items-center justify-center text-2xl`}>
-                  {selectedProductLink.image}
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-white mb-0.5">{selectedProductLink.name}</h3>
-                  <p className="text-[10px] text-emerald-400 font-medium">Gain de commission : {selectedProductLink.commission} / vente</p>
-                </div>
-              </div>
-
-              {/* Zone d'affichage du Lien & QR Code */}
-              <div className="space-y-4 pt-2">
-                <div>
-                  <label className="block text-white/60 text-[10px] font-bold uppercase mb-1">Votre lien personnalisé simulé</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      value={generateSimulatedLink(selectedProductLink.id)} 
-                      className="w-full bg-[#071020] border border-white/10 rounded-xl px-4 py-2 text-xs text-white/80 focus:outline-none" 
-                      readOnly
-                    />
-                    <button 
-                      onClick={() => { navigator.clipboard.writeText(generateSimulatedLink(selectedProductLink.id)); alert("Lien copié !"); }} 
-                      className="bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs px-4 py-2 rounded-xl transition"
-                    >
-                      Copier
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white text-gray-900 rounded-2xl flex flex-col items-center justify-center space-y-2 text-center">
-                  <div className="w-24 h-24 bg-gray-200 border-4 border-gray-900 flex items-center justify-center font-black text-xs p-2">
-                    [ QR CODE SIMULÉ ]
-                  </div>
-                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Scannez pour partager instantanément</span>
-                </div>
-              </div>
             </div>
 
-            {/* Actions de partage social */}
-            <div className="pt-6 border-t border-white/10 space-y-3">
-              <h4 className="font-bold text-center text-xs text-white">Partager directement sur :</h4>
-              <div className="grid grid-cols-4 gap-3 text-2xl">
-                <button onClick={() => alert("Partage simulé WhatsApp")} className="p-3 bg-green-600 rounded-xl">🟢</button>
-                <button onClick={() => alert("Partage simulé TikTok")} className="p-3 bg-gray-800 rounded-xl">📱</button>
-                <button onClick={() => alert("Partage simulé Insta")} className="p-3 bg-pink-600 rounded-xl">📸</button>
-                <button onClick={() => alert("Partage simulé Facebook")} className="p-3 bg-blue-700 rounded-xl">📘</button>
+            <div className="space-y-2 pt-2">
+              <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block text-center">Canaux recommandés</span>
+              <div className="grid grid-cols-4 gap-2 text-xs font-mono text-center">
+                <div onClick={() => alert("Lien préparé pour WhatsApp")} className="p-2.5 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] cursor-pointer transition-colors">WhatsApp</div>
+                <div onClick={() => alert("Lien préparé pour TikTok")} className="p-2.5 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] cursor-pointer transition-colors">TikTok</div>
+                <div onClick={() => alert("Lien préparé pour Instagram")} className="p-2.5 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] cursor-pointer transition-colors">Insta</div>
+                <div onClick={() => alert("Lien préparé pour Facebook")} className="p-2.5 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] cursor-pointer transition-colors">FB</div>
               </div>
             </div>
-
           </div>
         </div>
       )}
-
-      {/* =========================================================
-          🔥 BARRE DE NAVIGATION INFÉRIEURE (WEB APP UI)
-          ========================================================= */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d1f3c]/90 backdrop-blur-md border-t border-white/5 px-6 pt-2 pb-5 text-gray-400">
-        <div className="flex items-center justify-around">
-          <button onClick={() => setActiveTab("dashboard")} className={`flex flex-col items-center gap-1.5 p-2 ${activeTab === "dashboard" ? "text-blue-400" : ""}`}>
-            <span className="text-xl">🏠</span>
-            <span className="text-[10px] font-bold">Accueil</span>
-          </button>
-          <button onClick={() => setActiveTab("boutique")} className={`flex flex-col items-center gap-1.5 p-2 ${activeTab === "boutique" ? "text-blue-400" : ""}`}>
-            <span className="text-xl">Marketplace</span>
-            <span className="text-[10px] font-bold">Boutique</span>
-          </button>
-          <button onClick={() => setActiveTab("paie")} className={`flex flex-col items-center gap-1.5 p-2 ${activeTab === "paie" ? "text-blue-400" : ""}`}>
-            <span className="text-xl">FCFA</span>
-            <span className="text-[10px] font-bold">Gains</span>
-          </button>
-          <button onClick={() => setActiveTab("profil")} className={`flex flex-col items-center gap-1.5 p-2 ${activeTab === "profil" ? "text-blue-400" : ""}`}>
-            <span className="text-xl">👤 Profil</span>
-            <span className="text-[10px] font-bold">Compte</span>
-          </button>
-        </div>
-      </nav>
 
     </div>
   );
