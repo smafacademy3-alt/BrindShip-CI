@@ -27,10 +27,10 @@ export default function LoginPage() {
     setTimeout(() => {
       setLoading(false);
       if (role === "influencer") {
-        router.push("/dashboard/influencer");
-      } else {
-        router.push("/dashboard/vendor");
-      }
+  router.push("/influencer");
+} else {
+  router.push("/merchant");
+}
     }, 1500);
   };
 
