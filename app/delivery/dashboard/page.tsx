@@ -188,32 +188,47 @@ export default function DeliveryCompanyDashboard() {
                       <th className="pb-3 pt-1">Ville</th>
                       <th className="pb-3 pt-1">Tranche d'articles</th>
                       <th className="pb-3 pt-1">Frais de livraison</th>
+                      <th className="pb-3 pt-1">Com. Plateforme (2%)</th>
+                      <th className="pb-3 pt-1">Votre Net</th>
                       <th className="pb-3 pt-1 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.02] text-xs">
-                    {rules.map((rule) => (
-                      <tr key={rule.id} className="group hover:bg-white/[0.01]">
-                        <td className="py-3.5 font-medium text-white flex items-center gap-2">
-                          <span className="text-gray-500">📍</span> {rule.city}
-                        </td>
-                        <td className="py-3.5 text-gray-300">
-                          De <span className="font-mono text-blue-400 font-semibold">{rule.minQty}</span> à{" "}
-                          <span className="font-mono text-blue-400 font-semibold">{rule.maxQty}</span> articles
-                        </td>
-                        <td className="py-3.5 text-white font-bold font-mono">
-                          {rule.price.toLocaleString()} FCFA
-                        </td>
-                        <td className="py-3.5 text-right">
-                          <button 
-                            onClick={() => handleDeleteRule(rule.id)}
-                            className="text-red-400/70 hover:text-red-400 text-[11px] font-medium bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 rounded-lg px-2.5 py-1 transition-all"
-                          >
-                            Retirer
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {rules.map((rule) => {
+                      // Calcul des 2% de frais de gestion et du montant net restant
+                      const platformFee = Math.round(rule.price * 0.02);
+                      const netPayout = rule.price - platformFee;
+
+                      return (
+                        <tr key={rule.id} className="group hover:bg-white/[0.01]">
+                          <td className="py-3.5 font-medium text-white flex items-center gap-2">
+                            <span className="text-gray-500">📍</span> {rule.city}
+                          </td>
+                          <td className="py-3.5 text-gray-300">
+                            De <span className="font-mono text-blue-400 font-semibold">{rule.minQty}</span> à{" "}
+                            <span className="font-mono text-blue-400 font-semibold">{rule.maxQty}</span> articles
+                          </td>
+                          <td className="py-3.5 text-white font-semibold font-mono">
+                            {rule.price.toLocaleString()} FCFA
+                          </td>
+                          <td className="py-3.5 text-red-400 font-mono text-[11px]">
+                            -{platformFee.toLocaleString()} FCFA
+                          </td>
+                          <td className="py-3.5 text-emerald-400 font-bold font-mono">
+                            {netPayout.toLocaleString()} FCFA
+                          </td>
+                          <td className="py-3.5 text-right">
+                            <button 
+                              type="button"
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="text-red-400/70 hover:text-red-400 text-[11px] font-medium bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 rounded-lg px-2.5 py-1 transition-all"
+                            >
+                              Retirer
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
