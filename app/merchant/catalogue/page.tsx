@@ -8,28 +8,25 @@ type Product = {
   title: string;
   description: string;
   basePrice: number;
-  affiliateCommission: number;
   stock: number;
 };
 
 export default function CatalogManagement() {
-  // 1. État contenant les données de l'article (Modifiable en temps réel)
+  // 1. État contenant les données de l'article (Sans la commission)
   const [product, setProduct] = useState<Product>({
     id: "robe-1",
     title: "Robe Moderne Premium",
     description: "Robe de soirée haut de gamme, tissu respirant ajusté. Idéal pour cérémonies.",
     basePrice: 25000,
-    affiliateCommission: 5000,
-    stock: 12, // Stock initial simulé
+    stock: 12,
   });
 
   // 2. États pour la gestion de l'affichage des fenêtres (Modals)
   const [activeModal, setActiveModal] = useState<"stock" | "price" | null>(null);
 
-  // 3. États temporaires pour stocker les saisies des formulaires dans les Modals
+  // 3. États temporaires pour stocker les saisies des formulaires
   const [tempStock, setTempStock] = useState<number>(product.stock);
   const [tempBasePrice, setTempBasePrice] = useState<number>(product.basePrice);
-  const [tempCommission, setTempCommission] = useState<number>(product.affiliateCommission);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -37,17 +34,16 @@ export default function CatalogManagement() {
   const handleSaveStock = (e: React.FormEvent) => {
     e.preventDefault();
     setProduct((prev) => ({ ...prev, stock: tempStock }));
-    setActiveModal(null); // Ferme la modal
+    setActiveModal(null);
   };
 
-  const handleSavePrices = (e: React.FormEvent) => {
+  const handleSavePrice = (e: React.FormEvent) => {
     e.preventDefault();
     setProduct((prev) => ({
       ...prev,
       basePrice: tempBasePrice,
-      affiliateCommission: tempCommission,
     }));
-    setActiveModal(null); // Ferme la modal
+    setActiveModal(null);
   };
 
   return (
@@ -85,7 +81,7 @@ export default function CatalogManagement() {
           <div>
             <h2 className="text-xl font-semibold text-white tracking-tight">Gestion du Catalogue</h2>
             <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-              Gérez vos articles et attribuez les commissions d'affiliation.
+              Gérez vos articles et définissez vos prix fournisseurs.
             </p>
           </div>
           <button className="bg-amber-400 hover:bg-amber-500 text-black font-medium text-xs px-3 py-2.5 rounded-xl whitespace-nowrap shadow-md transition-all">
@@ -93,7 +89,7 @@ export default function CatalogManagement() {
           </button>
         </section>
 
-        {/* CARTE PRODUIT (Fidèle à la capture d'écran) */}
+        {/* CARTE PRODUIT */}
         <section className="bg-[#12161F] border border-white/[0.04] rounded-2xl p-4 space-y-4 shadow-xl">
           
           {/* Grille d'images (Angles) */}
@@ -122,15 +118,11 @@ export default function CatalogManagement() {
             </p>
           </div>
 
-          {/* Prix et Commissions */}
-          <div className="flex items-center justify-between pt-2 border-t border-white/[0.02]">
-            <div className="text-sm">
-              <span className="text-gray-400 text-xs">Base: </span>
-              <span className="font-bold text-white">{product.basePrice.toLocaleString()} FCFA</span>
-            </div>
-            <div className="text-sm">
-              <span className="text-gray-400 text-xs">Affilié: </span>
-              <span className="font-bold text-amber-400">+{product.affiliateCommission.toLocaleString()} FCFA</span>
+          {/* Prix Fournisseur Uniquement */}
+          <div className="pt-2 border-t border-white/[0.02]">
+            <div className="flex flex-col">
+              <span className="text-gray-500 text-[10px] uppercase tracking-widest font-mono mb-0.5">Prix Grossiste</span>
+              <span className="font-bold text-white text-lg">{product.basePrice.toLocaleString()} FCFA</span>
             </div>
           </div>
 
@@ -148,7 +140,6 @@ export default function CatalogManagement() {
             <button 
               onClick={() => {
                 setTempBasePrice(product.basePrice);
-                setTempCommission(product.affiliateCommission);
                 setActiveModal("price");
               }}
               className="w-full py-2.5 border border-amber-500/30 bg-amber-500/[0.02] hover:bg-amber-500/[0.06] text-xs font-medium text-amber-400 rounded-xl transition-colors"
@@ -208,18 +199,17 @@ export default function CatalogManagement() {
       {activeModal === "price" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
           <form 
-            onSubmit={handleSavePrices}
+            onSubmit={handleSavePrice}
             className="bg-[#12161F] w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border-t sm:border border-white/[0.08] p-6 space-y-4 shadow-2xl animate-slide-up"
           >
             <div>
-              <h3 className="text-base font-semibold text-white">Éditer la tarification</h3>
+              <h3 className="text-base font-semibold text-white">Éditer le Prix Fournisseur</h3>
               <p className="text-xs text-gray-400 mt-0.5">{product.title}</p>
             </div>
 
             <div className="space-y-4">
-              {/* Prix de base */}
               <div className="space-y-1.5">
-                <label className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">Prix de Base (FCFA)</label>
+                <label className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">Prix de Gros (FCFA)</label>
                 <div className="relative">
                   <input 
                     type="number" 
@@ -231,23 +221,7 @@ export default function CatalogManagement() {
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-500">XOF</span>
                 </div>
-              </div>
-
-              {/* Commission affilié */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">Commission Apporteur d'affaires (+ FCFA)</label>
-                <div className="relative">
-                  <input 
-                    type="number" 
-                    value={tempCommission}
-                    onChange={(e) => setTempCommission(parseInt(e.target.value) || 0)}
-                    className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-amber-500/50 rounded-xl pl-4 pr-12 py-3 text-sm text-amber-400 font-semibold outline-none transition-colors"
-                    min="0"
-                    required
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-amber-500/50">XOF</span>
-                </div>
-                <p className="text-[10px] text-gray-500 leading-tight">Cette marge s'ajoute au prix de base pour rémunérer vos revendeurs du réseau.</p>
+                <p className="text-[10px] text-gray-500 leading-tight">C'est le montant net que vous percevrez à chaque vente. Les influenceurs fixeront leur marge au-dessus de ce prix.</p>
               </div>
             </div>
 
