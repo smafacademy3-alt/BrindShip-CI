@@ -9,17 +9,33 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fonction simulée de connexion avant l'intégration du backend
-  const handleLogin = (e: React.FormEvent) => {
+  // Logique réelle de connexion liée à l'API backend
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulation de vérification dans la base de données (Prisma)
-    setTimeout(() => {
-      setIsLoading(false);
-      // Redirection temporaire vers le dashboard marchand pour tester
-      router.push("/merchant"); 
-    }, 1500);
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const data = await res.json();
+    setIsLoading(false);
+
+    if (data.success) {
+      // Redirection dynamique basée sur le rôle retourné par la base de données
+      const dashboardPaths: Record<string, string> = {
+        MERCHANT: "/merchant",
+        INFLUENCER: "/influencer",
+        DRIVER: "/delivery/dashboard",
+        ADMIN: "/admin/dashboard",
+        BUYER: "/",
+      };
+      router.push(dashboardPaths[data.role] || "/");
+    } else {
+      alert(data.error || "Une erreur est survenue");
+    }
   };
 
   return (
