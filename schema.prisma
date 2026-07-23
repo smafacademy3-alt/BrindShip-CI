@@ -1,4 +1,7 @@
-// schema.prisma
+// ============================================================
+// BRANDSHIP CI - Schéma de base de données (Prisma 5+)
+// PostgreSQL
+// ============================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -9,120 +12,679 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. Définition des Rôles (L'élément central des différents Dashboards)
+// ============================================================
+// ENUMS
+// ============================================================
+
 enum Role {
   ADMIN
-  MERCHANT
-  INFLUENCER
-  DRIVER
-  BUYER
+  MARCHAND
+  INFLUENCEUR
+  LIVREUR
+  CLIENT
 }
 
-enum OrderStatus {
-  PENDING           // En attente de validation
-  PREPARING         // Accepté par le marchand
-  READY_FOR_PICKUP  // Prêt pour le livreur
-  IN_TRANSIT        // En cours de livraison
-  DELIVERED         // Livré (déclenche les paiements)
-  CANCELLED         // Annulé
+enum StatutCommande {
+  EN_ATTENTE_PAIEMENT
+  PAYEE
+  CONFIRMEE
+  EN_PREPARATION
+  REMISE_LIVREUR
+  LIVREE
+  VALIDEE
+  LITIGE
+  ANNULEE
+  REMBOURSEE
 }
 
-// 2. Modèle Utilisateur Global
+enum TypeConversation {
+  CLIENT_INFLUENCEUR
+  INFLUENCEUR_MARCHAND
+}
+
+enum ReseauLive {
+  YOUTUBE
+  FACEBOOK
+  TIKTOK
+  INSTAGRAM
+}
+
+enum TypeAnnonceur {
+  MARCHAND
+  INFLUENCEUR
+}
+
+// ============================================================
+// UTILISATEURS
+// ============================================================
+
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  role          Role      @default(BUYER)
-  phone         String?
-  
-  // Portefeuille virtuel (Crucial pour les gains Influenceurs et Marchands)
-  walletBalance Float     @default(0.0) 
+  id                  String             @id @default(uuid())
+  email               String             @unique
+  telephone           String             @unique
+  passwordHash        String
+  role                Role
+  nomComplet          String
+  statut              String             @default("ACTIF") // ACTIF | SUSPENDU | EN_ATTENTE_KYC
+  enLigne             Boolean            @default(false)
+  derniereConnexion   DateTime           @default(now())
+  niveauVerification  String             @default("NON_VERIFIE") // NON_VERIFIE | TELEPHONE_VERIFIE | IDENTITE_VERIFIEE
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   // Relations
-  store         Store?    // Si l'utilisateur est un MARCHAND
-  promoCodes    PromoCode[] // Si l'utilisateur est un INFLUENCEUR
-  deliveries    Order[]   @relation("DriverOrders")
-  purchases     Order[]   @relation("BuyerOrders")
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  marchand            Marchand?
+  influenceur         Influenceur?
+  livreur             Livreur?
+  wallet              Wallet?
+  codesAvoir          CodeAvoir[]
+  messagesEnvoyes     Message[]          @relation("UserMessages")
+  ticketsSupport      TicketSupport[]    @relation("UserTickets")
+  clicsPublicitaires  ClicPublicitaire[] @relation("UserClics")
+  conversations       Conversation[]     @relation("UserConversations")
+  commandes           Commande[]         @relation("UserCommandes")
+
+  @@map("users")
 }
 
-// 3. Boutique du Marchand
-model Store {
-  id          String    @id @default(cuid())
-  name        String
-  description String?
-  merchantId  String    @unique
-  merchant    User      @relation(fields: [merchantId], references: [id])
-  products    Product[]
-  orders      Order[]
+// ============================================================
+// MARCHAND
+// ============================================================
+
+model Marchand {
+  id                        String             @id @default(uuid())
+  userId                    String             @unique
+  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nomEntreprise             String
+  rccm                      String?
+  kycValide                 Boolean            @default(false)
+  modeEncaissement          String             @default("SEQUESTRE_PLATEFORME") // SEQUESTRE_PLATEFORME | DIRECT
+  scoreConfiance            Int                @default(0)
+  depotGarantieMontant      Float              @default(0)
+  depotGarantieStatut       String             @default("AUCUN") // AUCUN | VERSE | PARTIELLEMENT_CONSOMME | RESTITUE
+  statutReversement         String             @default("A_JOUR") // A_JOUR | SUSPENDU
+  nbEchecsReversementCumules Int               @default(0)
+  suspenduLe                DateTime?
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+
+  produits                  Produit[]
+  commandes                 Commande[]
+  codesAvoir                CodeAvoir[]
+  reversements              Reversement[]
+  packsSMS                  PackSMS[]
+
+  @@map("marchands")
 }
 
-// 4. Catalogue Produits
-model Product {
-  id          String    @id @default(cuid())
-  name        String
-  price       Float
-  stock       Int       @default(0)
-  imageUrl    String?
-  storeId     String
-  store       Store     @relation(fields: [storeId], references: [id])
-  items       OrderItem[]
+// ============================================================
+// INFLUENCEUR
+// ============================================================
+
+model Influenceur {
+  id                       String             @id @default(uuid())
+  userId                   String             @unique
+  user                     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nomBoutique              String
+  slug                     String             @unique
+  logoUrl                  String?
+  themeCouleur             String             @default("orange")
+  margeParDefaut           Float              @default(0)
+  typeMargeParDefaut       String             @default("FIXE") // FIXE | POURCENTAGE
+  codeParrainage           String             @unique
+  parrainId                String?            // auto-référence
+
+  boutiqueProduits         BoutiqueProduit[]
+  codesPromo               CodePromo[]
+  sessionsLive             SessionLive[]
+  campagnesPublicitaires   CampagnePublicitaire[] @relation("CampagneInfluenceur")
+
+  @@map("influenceurs")
 }
 
-// 5. Codes Promo & Parrainage (Outils Publicitaires)
-model PromoCode {
-  id            String    @id @default(cuid())
-  code          String    @unique // ex: INFLUENCEUR225
-  influencerId  String
-  influencer    User      @relation(fields: [influencerId], references: [id])
-  
-  // Règles métier BrandShip
-  discountRate  Float     @default(0.0) // Réduction pour l'acheteur (ex: 5%)
-  rewardAmount  Float     @default(200.0) // Prime parrainage fixe ligne 1 (200 Fcfa)
-  
-  orders        Order[]
+// ============================================================
+// LIVREUR
+// ============================================================
+
+model Livreur {
+  id                   String             @id @default(uuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zoneCouverte         String             // ex: "Cocody, Angré, Yopougon"
+  vehicule             String?            // moto, voiture, tricycle
+  statutAbonnement     String             @default("ESSAI_GRATUIT") // ESSAI_GRATUIT | ACTIF | INACTIF
+  dateInscription      DateTime           @default(now())
+  prochaineEcheance    DateTime
+
+  tarifs               TarifLivraison[]
+  abonnements          AbonnementLivreur[]
+  livraisons           Livraison[]
+
+  @@map("livreurs")
 }
 
-// 6. Les Commandes (Le coeur du système)
-model Order {
-  id            String      @id @default(cuid())
-  status        OrderStatus @default(PENDING)
-  
-  // Acteurs impliqués
-  buyerId       String
-  buyer         User        @relation("BuyerOrders", fields: [buyerId], references: [id])
-  storeId       String
-  store         Store       @relation(fields: [storeId], references: [id])
-  driverId      String?
-  driver        User?       @relation("DriverOrders", fields: [driverId], references: [id])
-  
-  // Influenceur impliqué (Optionnel)
-  promoCodeId   String?
-  promoCode     PromoCode?  @relation(fields: [promoCodeId], references: [id])
+// ============================================================
+// ABONNEMENT LIVREUR
+// ============================================================
 
-  // Lignes de commande
-  items         OrderItem[]
-  
-  // Données Financières (Tracabilité stricte)
-  totalAmount   Float       // Montant payé par le client
-  brandshipFee  Float       // Les 2% de commission plateforme
-  influencerFee Float       @default(0.0) // Les 200 Fcfa (si code promo utilisé)
-  netToMerchant Float       // Ce qui revient au vendeur
-  
-  deliveryAddress String
-  createdAt     DateTime    @default(now())
+model AbonnementLivreur {
+  id               String   @id @default(uuid())
+  livreurId        String
+  livreur          Livreur  @relation(fields: [livreurId], references: [id], onDelete: Cascade)
+  periodeDebut     DateTime
+  periodeFin       DateTime
+  montant          Float    // 0 pour le mois offert
+  estEssaiGratuit  Boolean  @default(false)
+  statutPaiement   String   @default("EN_ATTENTE") // EN_ATTENTE | PAYE | ECHOUE
+  payeLe           DateTime?
+  createdAt        DateTime @default(now())
+
+  @@map("abonnements_livreur")
 }
 
-// Lignes de commande (Panier)
-model OrderItem {
-  id        String  @id @default(cuid())
-  orderId   String
-  order     Order   @relation(fields: [orderId], references: [id])
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  quantity  Int
-  priceAt   Float   // Prix bloqué au moment de l'achat
+// ============================================================
+// TARIF LIVRAISON (défini par le livreur)
+// ============================================================
+
+model TarifLivraison {
+  id           String   @id @default(uuid())
+  livreurId    String
+  livreur      Livreur  @relation(fields: [livreurId], references: [id], onDelete: Cascade)
+  ville        String   // ex: "Abidjan"
+  commune      String   // ex: "Cocody"
+  quartier     String?  // ex: "Angré"
+  montant      Float    // FCFA
+  actif        Boolean  @default(true)
+
+  @@unique([livreurId, ville, commune, quartier])
+  @@map("tarifs_livraison")
+}
+
+// ============================================================
+// PRODUIT (catalogue Marchand - privé)
+// ============================================================
+
+model Produit {
+  id               String             @id @default(uuid())
+  marchandId       String
+  marchand         Marchand           @relation(fields: [marchandId], references: [id], onDelete: Cascade)
+  nom              String
+  description      String
+  prixGrossiste    Float
+  stock            Int
+  images           String[] // URLs
+  statut           String   @default("BROUILLON") // BROUILLON | PUBLIE_INFLUENCEURS | RUPTURE
+  visibilite       String   @default("TOUS")      // TOUS | ASSIGNE
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  assignations     ProductAssignment[]
+  boutiqueProduits BoutiqueProduit[]
+
+  @@map("produits")
+}
+
+// ============================================================
+// ASSIGNATION PRODUIT (ciblage influenceur)
+// ============================================================
+
+model ProductAssignment {
+  id             String   @id @default(uuid())
+  produitId      String
+  produit        Produit  @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  influenceurId  String
+  influenceur    Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
+  assignedAt     DateTime @default(now())
+
+  @@unique([produitId, influenceurId])
+  @@map("product_assignments")
+}
+
+// ============================================================
+// BOUTIQUE PRODUIT (produit publié par un influenceur)
+// ============================================================
+
+model BoutiqueProduit {
+  id                 String     @id @default(uuid())
+  produitId          String
+  produit            Produit    @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  influenceurId      String
+  influenceur        Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
+  typeMarge          String     // FIXE | POURCENTAGE
+  valeurMarge        Float
+  prixFinalCalcule   Float      // recalculé à chaque changement
+  actif              Boolean    @default(true)
+  publieLe           DateTime   @default(now())
+
+  commandes          Commande[]
+  sessionsLive       ProduitSessionLive[]
+
+  @@unique([produitId, influenceurId])
+  @@map("boutique_produits")
+}
+
+// ============================================================
+// CODE PROMO (influenceur)
+// ============================================================
+
+model CodePromo {
+  id                   String   @id @default(uuid())
+  influenceurId        String
+  influenceur          Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
+  code                 String   @unique
+  typeReduction        String   // POURCENTAGE | MONTANT_FIXE
+  valeur               Float
+  dateDebut            DateTime
+  dateFin              DateTime?
+  utilisationsMax      Int?
+  utilisationsActuelles Int     @default(0)
+
+  commandes            Commande[]
+
+  @@map("codes_promo")
+}
+
+// ============================================================
+// CODE AVOIR (remboursement marchand)
+// ============================================================
+
+model CodeAvoir {
+  id                 String   @id @default(uuid())
+  code               String   @unique
+  marchandId         String
+  marchand           Marchand @relation(fields: [marchandId], references: [id], onDelete: Cascade)
+  clientId           String
+  client             User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  commandeOrigineId  String
+  motifRetour        String
+  montant            Float
+  statut             String   @default("NON_UTILISE") // NON_UTILISE | UTILISE | EXPIRE
+  dateExpiration     DateTime?
+  utiliseSurCommandeId String?
+  createdAt          DateTime @default(now())
+
+  @@map("codes_avoir")
+}
+
+// ============================================================
+// COMMANDE
+// ============================================================
+
+model Commande {
+  id                   String         @id @default(uuid())
+  clientId             String
+  client               User           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  marchandId           String
+  marchand             Marchand       @relation(fields: [marchandId], references: [id], onDelete: Cascade)
+  boutiqueProduitId    String
+  boutiqueProduit      BoutiqueProduit @relation(fields: [boutiqueProduitId], references: [id])
+  influenceurId        String
+  codePromoId          String?
+  codePromo            CodePromo?     @relation(fields: [codePromoId], references: [id])
+  codeAvoirId          String?
+  codeAvoir            CodeAvoir?     @relation(fields: [codeAvoirId], references: [id])
+
+  quantite             Int
+  prixGrossiste        Float
+  commissionBrandShip  Float
+  margeInfluenceurFCFA Float
+  fraisLivraison       Float
+  montantTotal         Float
+
+  statut               StatutCommande @default(EN_ATTENTE_PAIEMENT)
+  dateLivraison        DateTime?
+  dateFinSequestre     DateTime?
+  transactionPaiementId String?
+
+  livraison            Livraison?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  reversements         Reversement[]
+  ticketsSupport       TicketSupport[]
+
+  @@map("commandes")
+}
+
+// ============================================================
+// LIVRAISON
+// ============================================================
+
+model Livraison {
+  id           String   @id @default(uuid())
+  commandeId   String   @unique
+  commande     Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  livreurId    String
+  livreur      Livreur  @relation(fields: [livreurId], references: [id], onDelete: Cascade)
+  statut       String   @default("ASSIGNEE") // ASSIGNEE | RECUPEREE | EN_COURS | LIVREE | ECHEC
+  preuveUrl    String?  // photo ou signature
+  codeOTP      String?
+  livreLe      DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("livraisons")
+}
+
+// ============================================================
+// TRANSACTION (Mobile Money)
+// ============================================================
+
+model Transaction {
+  id           String   @id @default(uuid())
+  commandeId   String
+  commande     Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  operateur    String   // ORANGE_MONEY | WAVE | MTN_MOMO | MOOV_MONEY
+  agregateur   String   // CINETPAY | PAYDUNYA | ELYONPAY
+  reference    String   @unique
+  montant      Float
+  statut       String   // INITIEE | REUSSIE | ECHOUEE
+  webhookRecu  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@map("transactions")
+}
+
+// ============================================================
+// REVERSEMENT (suivi des sommes dues par le Marchand)
+// ============================================================
+
+model Reversement {
+  id                String   @id @default(uuid())
+  marchandId        String
+  marchand          Marchand @relation(fields: [marchandId], references: [id], onDelete: Cascade)
+  commandeId        String   @unique
+  commande          Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  beneficiaireType  String   // BRANDSHIP | INFLUENCEUR | LIVREUR | PARRAIN
+  beneficiaireId    String
+  montant           Float
+  statut            String   @default("A_VENIR") // A_VENIR | EN_COURS | REUSSI | ECHOUE
+  dateEcheance      DateTime
+  dateTraitement    DateTime?
+  nbTentatives      Int      @default(0)
+  motifEchec        String?
+  createdAt         DateTime @default(now())
+
+  @@map("reversements")
+}
+
+// ============================================================
+// WALLET (portefeuille interne)
+// ============================================================
+
+model Wallet {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  soldeDisponible   Float    @default(0)
+  soldeEnSequestre  Float    @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  retraits          Retrait[]
+
+  @@map("wallets")
+}
+
+// ============================================================
+// RETRAIT
+// ============================================================
+
+model Retrait {
+  id           String   @id @default(uuid())
+  walletId     String
+  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  montant      Float
+  operateur    String
+  numeroCible  String
+  statut       String   @default("EN_ATTENTE") // EN_ATTENTE | TRAITE | ECHOUE
+  createdAt    DateTime @default(now())
+
+  @@map("retraits")
+}
+
+// ============================================================
+// PARAMETRES PLATEFORME (Admin ajustable)
+// ============================================================
+
+model ParametrePlateforme {
+  id                                      String  @id @default(uuid())
+  tauxCommissionBrandShip                 Float   @default(0.02)
+  montantParrainage                       Float   @default(50)
+  delaiSequestreJours                     Int     @default(10)
+  seuilBeneficeCommission                 Float   @default(5000)
+  seuilBeneficeTauxSupplementaire         Float   @default(10000)
+  commissionVenteBasse                    Float   @default(200)
+  commissionVenteHaute                    Float   @default(500)
+  tauxSupplementaireHauteMarge            Float   @default(0.01)
+  delaiGraceReversementHeures             Int     @default(48)
+  nbEchecsTolereAvantSuspension           Int     @default(3)
+  montantAbonnementLivreur                Float   @default(10000)
+  dureeEssaiGratuitJours                  Int     @default(30)
+  scoreConfianceSeuilModeDirect           Int     @default(20)
+  montantDepotGarantieDefaut              Float   @default(0)
+  partPlateformePub                       Float   @default(0.25)
+  partBudgetDiffusionPub                  Float   @default(0.75)
+  tauxParVueQualifiante                   Float   @default(1)
+  dureeMinVueQualifianteSecondes          Int     @default(15)
+  montantGainVisiteurParVue               Float   @default(0.5)
+  plafondRetraitSansIdentite              Float   @default(2000)
+  versionActive                           Boolean @default(true)
+  effectifDepuis                          DateTime @default(now())
+
+  @@map("parametres_plateforme")
+}
+
+// ============================================================
+// LIVE SHOPPING
+// ============================================================
+
+model SessionLive {
+  id                          String     @id @default(uuid())
+  influenceurId               String
+  influenceur                 Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
+  titre                       String
+  statut                      String     @default("PLANIFIEE") // PLANIFIEE | EN_DIRECT | TERMINEE | ANNULEE
+  modeRotationOverlay         String     @default("AUTO") // AUTO | MANUEL
+  intervalleRotationSecondes  Int        @default(60)
+  produitOverlayActuelId      String?
+  dateDebut                   DateTime?
+  dateFin                     DateTime?
+  createdAt                   DateTime   @default(now())
+
+  produits                    ProduitSessionLive[]
+  connexions                  ConnexionReseauLive[]
+
+  @@map("sessions_live")
+}
+
+model ProduitSessionLive {
+  id                String     @id @default(uuid())
+  sessionId         String
+  session           SessionLive @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  boutiqueProduitId String
+  boutiqueProduit   BoutiqueProduit @relation(fields: [boutiqueProduitId], references: [id])
+  ordreAffichage    Int        @default(0)
+  ventesGenerees    Int        @default(0)
+  caGenere          Float      @default(0)
+
+  @@map("produits_session_live")
+}
+
+model ConnexionReseauLive {
+  id                String     @id @default(uuid())
+  sessionId         String
+  session           SessionLive @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  reseau            ReseauLive
+  statut            String     @default("DECONNECTE") // CONNECTE | DECONNECTE | ERREUR
+  tokenOAuthId      String     // référence au jeton OAuth stocké de façon sécurisée
+  picSpectateurs    Int?
+  derniereErreur    String?
+  createdAt         DateTime   @default(now())
+
+  @@map("connexions_reseau_live")
+}
+
+// ============================================================
+// MODULE PUBLICITAIRE (Ad Manager)
+// ============================================================
+
+model PackPublicitaire {
+  id              String     @id @default(uuid())
+  nom             String
+  dureeJours      Int
+  emplacement     String     // BANNIERE_ACCUEIL | BANNIERE_CATEGORIE | RESULTATS_SPONSORISES
+  prix            Float
+  poidsRotation   Int        @default(1) // priorité
+  actif           Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+
+  campagnes       CampagnePublicitaire[]
+
+  @@map("packs_publicitaires")
+}
+
+model CampagnePublicitaire {
+  id                        String           @id @default(uuid())
+  typeAnnonceur             TypeAnnonceur
+  marchandId                String?
+  marchand                  Marchand?        @relation(fields: [marchandId], references: [id], onDelete: SetNull)
+  influenceurId             String?
+  influenceur               Influenceur?     @relation(fields: [influenceurId], references: [id], onDelete: SetNull)
+  packId                    String
+  pack                      PackPublicitaire @relation(fields: [packId], references: [id])
+  objectif                  String           // VISIBILITE_BOUTIQUE | VISIBILITE_PRODUIT
+  produitCibleId            String?
+  visuelUrl                 String
+  statutModeration          String           @default("EN_ATTENTE") // EN_ATTENTE | APPROUVE | REJETE
+  dateDebut                 DateTime
+  dateFin                   DateTime
+  montantPaye               Float
+  recettePlateformeImmediate Float            // 25%
+  budgetDiffusionInitial    Float            // 75%
+  budgetDiffusionRestant    Float
+  nbVuesQualifiantes        Int              @default(0)
+  impressions               Int              @default(0)
+  clics                     Int              @default(0)
+  statutDiffusion           String           @default("EN_DIFFUSION") // EN_DIFFUSION | ARRETEE_BUDGET_EPUISE | ARRETEE_DUREE_ECOULEE | ARRETEE_MANUELLE
+  createdAt                 DateTime         @default(now())
+
+  clicsDetail               ClicPublicitaire[]
+
+  @@map("campagnes_publicitaires")
+}
+
+model ClicPublicitaire {
+  id                         String   @id @default(uuid())
+  campagneId                 String
+  campagne                   CampagnePublicitaire @relation(fields: [campagneId], references: [id], onDelete: Cascade)
+  visiteurRef                String   // identifiant de session anonymisé
+  visiteurUserId             String?
+  visiteurUser               User?    @relation(fields: [visiteurUserId], references: [id], onDelete: SetNull)
+  cliqueLe                   DateTime @default(now())
+  dureeVisionnageSecondes    Int      @default(0)
+  estQualifiante             Boolean  @default(false)
+  montantGagneVisiteur       Float    @default(0)
+
+  @@map("clics_publicitaires")
+}
+
+// ============================================================
+// PACK SMS (Marchand)
+// ============================================================
+
+model PackSMS {
+  id               String   @id @default(uuid())
+  marchandId       String
+  marchand         Marchand @relation(fields: [marchandId], references: [id], onDelete: Cascade)
+  operateur        String   // ORANGE_CI_BUSINESS | MTN_SMS_PRO | MOOV_SMS
+  creditsAchetes   Int
+  creditsRestants  Int
+  montantPaye      Float
+  createdAt        DateTime @default(now())
+
+  envois           EnvoiSMS[]
+
+  @@map("packs_sms")
+}
+
+model EnvoiSMS {
+  id           String   @id @default(uuid())
+  packId       String
+  pack         PackSMS  @relation(fields: [packId], references: [id], onDelete: Cascade)
+  destinataire String
+  contenu      String
+  type         String   // TRANSACTIONNEL | MARKETING
+  statut       String   @default("ENVOYE") // ENVOYE | DELIVRE | ECHOUE
+  envoyeLe     DateTime @default(now())
+
+  @@map("envois_sms")
+}
+
+// ============================================================
+// MESSAGERIE (Chat)
+// ============================================================
+
+model Conversation {
+  id                 String             @id @default(uuid())
+  type               TypeConversation
+  participantAId     String
+  participantBId     String
+  produitContexteId  String?
+  commandeContexteId String?
+  derniereActivite   DateTime           @default(now())
+  createdAt          DateTime           @default(now())
+
+  messages           Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id               String       @id @default(uuid())
+  conversationId   String
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  auteurId         String
+  auteur           User         @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  contenu          String
+  pieceJointeUrl   String?
+  statut           String       @default("ENVOYE") // ENVOYE | RECU | LU
+  envoyeLe         DateTime     @default(now())
+
+  @@map("messages")
+}
+
+// ============================================================
+// SUPPORT (Nous contacter)
+// ============================================================
+
+model TicketSupport {
+  id               String           @id @default(uuid())
+  numero           String           @unique
+  auteurId         String
+  auteur           User             @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  motif            String           // PAIEMENT | LIVRAISON | LITIGE_COMMANDE | COMPTE | BOUTIQUE | AUTRE
+  commandeId       String?
+  commande         Commande?        @relation(fields: [commandeId], references: [id], onDelete: SetNull)
+  message          String
+  pieceJointeUrl   String?
+  statut           String           @default("NOUVEAU") // NOUVEAU | EN_COURS | RESOLU
+  agentAssigneId   String?
+  createdAt        DateTime         @default(now())
+  resoluLe         DateTime?
+
+  reponses         MessageTicket[]
+
+  @@map("tickets_support")
+}
+
+model MessageTicket {
+  id           String         @id @default(uuid())
+  ticketId     String
+  ticket       TicketSupport  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  auteurId     String
+  contenu      String
+  envoyeLe     DateTime       @default(now())
+
+  @@map("messages_ticket")
 }
