@@ -1,178 +1,110 @@
-# Brand Ship CI — Documentation Technique MVP
+# BRANDSHIP CI
 
-## 🚀 Vue d'ensemble
+**Marketplace social commerce B2B2C pour la Côte d'Ivoire.**
+Marchands (grossistes) ↔ Influenceurs/Vendeurs ↔ Clients — avec paiement Mobile Money, livraison suivie et modération centralisée.
 
-Brand Ship CI est une plateforme de Social Commerce/BrandShipping pour la Côte d'Ivoire et l'Afrique de l'Ouest. Les influenceurs créent des boutiques en ligne en un clic, sélectionnent des produits fournisseurs, fixent leurs prix et encaissent leurs gains via Mobile Money.
-
----
-
-## 📁 Structure du Projet
-
-```
-brandship/
-├── backend/
-│   ├── prisma/
-│   │   └── schema.prisma          ← Schéma BDD complet (8 modèles)
-│   └── src/
-│       ├── app.ts                 ← Express + middlewares
-│       ├── controllers/
-│       │   ├── auth.controller.ts    ← Register/Login/Profile
-│       │   ├── order.controller.ts   ← completeOrder (transaction atomique)
-│       │   ├── store.controller.ts   ← Boutiques influenceurs
-│       │   └── wallet.controller.ts  ← Portefeuille + retraits
-│       ├── middleware/
-│       │   └── auth.middleware.ts    ← JWT + RBAC
-│       ├── routes/
-│       │   └── index.ts              ← Toutes les routes
-│       ├── types/
-│       │   └── index.ts              ← Types TypeScript
-│       └── utils/
-│           ├── financial.ts          ← Moteur de calcul commissions
-│           └── prisma.ts             ← Singleton Prisma
-└── frontend/
-    └── src/app/
-        └── page.tsx               ← Page d'accueil Next.js complète
-```
+> 📄 La spécification technique et fonctionnelle complète est dans [`BRANDSHIP_CI_Specification.md`](./BRANDSHIP_CI_Specification.md). Ce README en est le résumé d'entrée — se référer au document complet pour l'implémentation (schéma Prisma complet, fonctions de calcul, DB, etc.).
 
 ---
 
-## 💰 Règles Financières (Moteur de Calcul)
+## Le concept en une phrase
 
-### Exemple concret : Produit Mode
+Le catalogue grossiste n'est **jamais visible du grand public** : un Marchand publie ses produits, un Influenceur les sélectionne, fixe sa propre marge et les diffuse dans sa boutique personnalisée et sur ses réseaux sociaux — seuls les produits qu'un Influenceur a choisi de publier apparaissent sur la marketplace publique.
 
-| Acteur | Montant | Calcul |
-|--------|---------|--------|
-| Prix plancher fournisseur | 10 000 FCFA | Fixé par le fournisseur |
-| Prix souhaité influenceur | 14 000 FCFA | Fixé par l'influenceur |
-| **Prix affiché client** | **14 700 FCFA** | 14 000 + 700 frais traitement |
-| Commission fournisseur | -200 FCFA | 2% × 10 000 |
-| **Fournisseur reçoit** | **9 800 FCFA** | Net |
-| Marge brute influenceur | 4 000 FCFA | 14 000 - 10 000 |
-| Commission influenceur | -500 FCFA | Fixe plateforme |
-| Bonus parrain (si actif) | -200 FCFA | 1 niveau |
-| **Influenceur reçoit** | **3 300 FCFA** | Net (avec parrain) |
-| **Parrain reçoit** | **200 FCFA** | Bonus automatique |
-| **Plateforme collecte** | **1 600 FCFA** | 700 + 200 + 500 + 200 |
-
-### Constants (src/utils/financial.ts)
-```typescript
-PROCESSING_FEE: 700 FCFA         // Invisible au client
-SUPPLIER_COMMISSION_RATE: 2%     // Sur prix plancher
-INFLUENCER_COMMISSION: 500 FCFA  // Fixe par vente
-REFERRAL_BONUS: 200 FCFA         // 1 niveau, 1 parrain
 ```
+MARCHAND (Entreprise/Grossiste)
+   │  publie des produits (prix de gros, stock) — visibles UNIQUEMENT par les Influenceurs
+   ▼
+INFLUENCEUR / VENDEUR
+   │  sélectionne, fixe SA marge, publie dans SA boutique (logo, nom, slug)
+   │  diffuse sur réseaux sociaux + marketplace publique + Live Shopping
+   ▼
+CLIENT FINAL (public)
+   │  achète sur la marketplace publique ou via la boutique de l'influenceur
+   ▼
+MARCHAND traite la commande → LIVREUR livre → Séquestre 10 jours → Commissions reversées
+```
+
+## Les 5 rôles
+
+| Rôle | Rôle principal |
+|---|---|
+| **Admin BrandShip** | Configuration financière, modération, arbitrage des litiges, supervision globale |
+| **Marchand** | Publie le catalogue de gros, traite les commandes, encaisse directement les clients |
+| **Influenceur / Vendeur** | Sélectionne des produits, fixe sa marge, anime sa boutique et ses réseaux sociaux |
+| **Livreur / Logistique** | Fixe ses tarifs de transport par zone, livre les commandes assignées |
+| **Client** | Achète sur la marketplace publique ou via une boutique d'influenceur |
+
+## Fonctionnalités clés
+
+- **Formule de prix transparente** : `Prix_Final = Prix_Grossiste + Commission_BrandShip (2%) + Marge_Influenceur + Frais_Livraison`
+- **Séquestre de 10 jours** avant reversement des commissions (Marchand, Influenceur, Livreur, Parrain, BrandShip)
+- **Paiement Mobile Money** via agrégateur (Orange Money, Wave, MTN MoMo, Moov Money)
+- **Boutiques personnalisées** pour chaque Influenceur (logo, nom, slug, thème, marge)
+- **Système de parrainage** Influenceur (50 FCFA/vente validée, un seul niveau)
+- **Codes promo** (déduits de la marge de l'influenceur) et **codes d'avoir** (retour produit, réutilisables chez la marque du Marchand émetteur)
+- **Module publicitaire (Ad Manager)** pour Marchands et Influenceurs, avec facturation **View-to-Pay** (25% plateforme / 75% budget de diffusion, 1 FCFA par vue qualifiante = clic + 15s de visionnage)
+- **Gains Client/Visiteur** sur les publicités vues, retrait réservé aux comptes vérifiés
+- **Live Shopping multi-plateforme** (YouTube, Facebook, TikTok, Instagram en simultané) avec overlay produit
+- **Messagerie intégrée** type Alibaba (Client↔Influenceur, Influenceur↔Marchand) avec statut en ligne/hors ligne
+- **Support & Assistance** ("Nous contacter") avec tickets suivis
+- **Abonnement mensuel Livreur** (10 000 FCFA, premier mois offert) et **packs SMS Business** pour le Marchand
+- **Score de confiance / dépôt de garantie** pour sécuriser l'encaissement direct des nouveaux Marchands
+- **Suspension automatique** des Marchands en cas de reversements impayés
+
+## Stack technique recommandée
+
+| Couche | Choix |
+|---|---|
+| Backend | Node.js + Express (ou NestJS) |
+| Base de données | PostgreSQL + Prisma ORM |
+| Temps réel | WebSocket (Socket.io) |
+| Frontend | Next.js (React) |
+| Cache / files d'attente | Redis + BullMQ |
+| Stockage images | Cloudinary ou AWS S3 |
+| Paiement | Agrégateur Mobile Money (CinetPay ou PayDunya) |
+| Notifications | Twilio/WhatsApp Business API + push web |
+| Hébergement | Vercel (frontend) + Railway/Render (backend + PostgreSQL) |
+
+## Charte graphique
+
+Couleurs de la Côte d'Ivoire, déclinées en nuances premium/épurées :
+- 🟠 **Orange** (`#F77F00` / `#FF8200`) — CTA, accents, prix
+- ⚪ **Blanc** (`#FFFFFF` / `#FAFAFA`) — fond, respiration
+- 🟢 **Vert** (`#009A44` / `#00A651`) — validation, succès, statuts livrés
+
+## Sommaire de la spécification
+
+La spécification complète (16 sections) couvre :
+
+0. Contexte marché & meilleures pratiques 2026
+1. Vision & positionnement
+2. Rôles & matrice de permissions
+3. Logique financière (prix, séquestre, commissions, parrainage, abonnement Livreur, score de confiance)
+4. Dashboard Marchand
+5. Dashboard Influenceur / Vendeur
+6. Dashboard Logistique / Livreur
+7. Interface Boutique publique (Client)
+8. Dashboard Admin
+9. Module Publicitaire (Ad Manager, View-to-Pay, gains visiteur, packs SMS)
+10. Messagerie intégrée
+11. Support & Assistance
+12. Base de données — schéma Prisma complet
+13. Intégration paiement Mobile Money
+14. Stack technique
+15. Roadmap (MVP → Automatisation → Scale)
+16. Points de vigilance
+
+## Statut du projet
+
+📋 **Phase de spécification** — architecture, logique financière et schéma de données finalisés. Développement du MVP à venir (voir section 15, Roadmap, dans la spécification).
+
+## Points de vigilance à connaître avant de démarrer le build
+
+- Le take rate transactionnel est structurellement bas — voir l'analyse de rentabilité pour les recommandations (paliers progressifs, groupement des reversements)
+- Les API de Live Shopping ont des niveaux d'accès très différents selon le réseau (TikTok/Instagram plus restreints que YouTube/Facebook)
+- Le mécanisme de gains Client/Visiteur sur les publicités doit être surveillé de près pour le risque de fraude (clics artificiels)
 
 ---
 
-## 🗄️ Schéma Base de Données
-
-### Modèles Prisma
-
-| Modèle | Description |
-|--------|-------------|
-| `User` | Admins, Fournisseurs, Influenceurs. Parrainage réflexif. Portefeuille. |
-| `Category` | Catégories de produits avec slug |
-| `Product` | Produits fournisseurs. Images Cloudinary. Prix plancher. |
-| `Store` | Boutique de l'influenceur avec slug unique |
-| `StoreProduct` | Produit dans une boutique avec prix influenceur. `final_price = desired_price + 700` |
-| `Order` | Commande COD avec snapshot financier complet |
-| `Transaction` | Historique comptable strict (SALE_EARNING, REFERRAL_BONUS, WITHDRAWAL…) |
-| `Withdrawal` | Demandes de retrait Mobile Money (MTN/Orange/Wave) |
-| `Notification` | Alertes en temps réel |
-
----
-
-## 🔌 API REST — Routes
-
-### Auth
-```
-POST /api/v1/auth/register   → Inscription (avec code parrainage optionnel)
-POST /api/v1/auth/login      → Connexion par téléphone + mot de passe
-GET  /api/v1/auth/profile    → Profil utilisateur connecté [AUTH]
-```
-
-### Boutiques
-```
-POST /api/v1/stores              → Créer une boutique [INFLUENCER]
-POST /api/v1/stores/products     → Ajouter produit à boutique [INFLUENCER]
-GET  /api/v1/stores/:slug        → Boutique publique [PUBLIC]
-```
-
-### Commandes
-```
-POST /api/v1/orders              → Passer commande [PUBLIC — COD]
-POST /api/v1/orders/complete     → Valider livraison + distribuer gains [ADMIN/SUPPLIER]
-POST /api/v1/orders/cancel       → Annuler commande [AUTH]
-```
-
-### Portefeuille
-```
-GET  /api/v1/wallet/balance       → Solde + stats [AUTH]
-GET  /api/v1/wallet/transactions  → Historique paginé [AUTH]
-POST /api/v1/wallet/withdraw      → Demande retrait Mobile Money [AUTH]
-```
-
----
-
-## 🔐 Sécurité
-
-- **JWT** : tokens 7 jours, vérification sur chaque route protégée
-- **RBAC** : `requireRole('ADMIN', 'SUPPLIER', 'INFLUENCER')`
-- **Transactions Prisma** : `$transaction()` pour toute opération financière (atomique + rollback)
-- **bcryptjs** : hash des mots de passe (12 rounds)
-- **Helmet.js** : headers HTTP sécurisés
-- **Validation prix** : impossible de vendre sous le prix plancher fournisseur
-
----
-
-## ⚙️ Installation & Démarrage
-
-### Backend
-```bash
-cd backend
-npm install
-
-# Configurer .env
-DATABASE_URL="postgresql://user:pass@localhost:5432/brandship"
-JWT_SECRET="votre_secret_jwt_solide"
-CLOUDINARY_URL="cloudinary://..."
-FRONTEND_URL="http://localhost:3000"
-
-# Initialiser la base de données
-npx prisma migrate dev --name init
-npx prisma generate
-
-# Démarrer en développement
-npm run dev        # → http://localhost:4000
-```
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev        # → http://localhost:3000
-```
-
----
-
-## 🔜 Fonctionnalités à Développer (Roadmap)
-
-### Phase 2
-- [ ] Dashboard influenceur (stats, commandes, revenus)
-- [ ] Dashboard fournisseur (produits, commandes reçues)
-- [ ] Upload images Cloudinary avec compression .webp
-- [ ] Notifications en temps réel (Socket.io ou SSE)
-- [ ] Intégration Cinetpay/Wave pour les retraits automatiques
-
-### Phase 3
-- [ ] App mobile React Native
-- [ ] Intégration WhatsApp Business API
-- [ ] Programme de parrainage multi-niveaux
-- [ ] Analytics et rapports
-
----
-
-## 📞 Contact
-
-**Brand Ship CI** · Abidjan, Côte d'Ivoire  
-Plateforme Social Commerce Afrique de l'Ouest
+*Document généré dans le cadre de la conception de BRANDSHIP CI — voir [`BRANDSHIP_CI_Specification.md`](./BRANDSHIP_CI_Specification.md) pour tous les détails techniques.*
