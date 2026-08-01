@@ -1,21 +1,4 @@
-// ============================================================
-// BRANDSHIP CI - Schéma de base de données (Prisma 5+)
-// PostgreSQL
-// ============================================================
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-// ============================================================
-// ENUMS
-// ============================================================
-
+// ============ UTILISATEURS ============
 enum Role {
   ADMIN
   MARCHAND
@@ -24,6 +7,210 @@ enum Role {
   CLIENT
 }
 
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  telephone     String   @unique   // clé pour Mobile Money
+  passwordHash  String
+  role          Role
+  statut        String   @default("ACTIF") // ACTIF, SUSPENDU, EN_ATTENTE_KYC
+  enLigne       Boolean  @default(false)   // vrai tant qu'une connexion WebSocket est active
+  derniereConnexion DateTime @default(now())
+  niveauVerification String @default("NON_VERIFIE") // NON_VERIFIE | TELEPHONE_VERIFIE | IDENTITE_VERIFIEE
+  createdAt     DateTime @default(now())
+
+  marchand      Marchand?
+  influenceur   Influenceur?
+  livreur       Livreur?
+  wallet        Wallet?
+  codesAvoir    CodeAvoir[]
+  messagesEnvoyes Message[]
+  ticketsSupport TicketSupport[]
+  clicsPublicitaires ClicPublicitaire[]
+}
+
+// ============ MARCHAND ============
+model Marchand {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  nomEntreprise   String
+  rccm            String?  // registre de commerce, pour KYC
+  kycValide       Boolean  @default(false)
+  modeEncaissement String  @default("SEQUESTRE_PLATEFORME") // SEQUESTRE_PLATEFORME | DIRECT
+  scoreConfiance  Int      @default(0)   // calculé : commandes validées sans litige, ancienneté, ponctualité reversements
+  depotGarantieMontant Float @default(0)
+  depotGarantieStatut  String @default("AUCUN") // AUCUN | VERSE | PARTIELLEMENT_CONSOMME | RESTITUE
+  statutReversement String @default("A_JOUR") // A_JOUR | SUSPENDU
+  nbEchecsReversementCumules Int @default(0)
+  suspenduLe      DateTime?
+  produits        Produit[]
+  commandes       Commande[]
+  codesAvoir      CodeAvoir[]
+  reversements    Reversement[]
+  packsSMS        PackSMS[]
+}
+
+// ============ REVERSEMENT (suivi des sommes dues par le Marchand) ============
+model Reversement {
+  id              String   @id @default(uuid())
+  marchandId      String
+  marchand        Marchand @relation(fields: [marchandId], references: [id])
+  commandeId      String   @unique
+  beneficiaireType String  // BRANDSHIP | INFLUENCEUR | LIVREUR | PARRAIN
+  beneficiaireId  String
+  montant         Float
+  statut          String   @default("A_VENIR") // A_VENIR | EN_COURS | REUSSI | ECHOUE
+  dateEcheance    DateTime // dateLivraison + délai de séquestre
+  dateTraitement  DateTime?
+  nbTentatives    Int      @default(0)
+  motifEchec      String?
+}
+
+// ============ INFLUENCEUR ============
+model Influenceur {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  nomBoutique      String
+  slug             String   @unique
+  logoUrl          String?
+  themeCouleur     String?  @default("orange")
+  margeParDefaut   Float    @default(0)
+  typeMargeParDefaut String @default("FIXE") // FIXE | POURCENTAGE
+  codeParrainage   String   @unique
+  parrainId        String?  // auto-référence vers l'influenceur parrain
+
+  boutiqueProduits BoutiqueProduit[]
+  codesPromo       CodePromo[]
+  sessionsLive     SessionLive[]
+}
+
+// ============ PRODUIT (catalogue Marchand — privé) ============
+model Produit {
+  id              String   @id @default(uuid())
+  marchandId      String
+  marchand        Marchand @relation(fields: [marchandId], references: [id])
+  nom             String
+  description     String
+  prixGrossiste   Float
+  stock           Int
+  images          String[] // URLs
+  statut          String   @default("BROUILLON") // BROUILLON | PUBLIE_INFLUENCEURS | RUPTURE
+  visibilite      String   @default("TOUS")       // TOUS | ASSIGNE
+  createdAt       DateTime @default(now())
+
+  assignations    ProductAssignment[]
+  boutiqueProduits BoutiqueProduit[]
+}
+
+// Ciblage : quel produit est visible par quel(s) influenceur(s)
+model ProductAssignment {
+  id            String   @id @default(uuid())
+  produitId     String
+  produit       Produit  @relation(fields: [produitId], references: [id])
+  influenceurId String
+  assignedAt    DateTime @default(now())
+
+  @@unique([produitId, influenceurId])
+}
+
+// ============ BOUTIQUE PRODUIT (produit publié par un influenceur) ============
+model BoutiqueProduit {
+  id                    String   @id @default(uuid())
+  produitId             String
+  produit               Produit  @relation(fields: [produitId], references: [id])
+  influenceurId         String
+  influenceur           Influenceur @relation(fields: [influenceurId], references: [id])
+  typeMarge             String   // FIXE | POURCENTAGE
+  valeurMarge           Float
+  prixFinalCalcule      Float    // recalculé côté serveur à chaque publication
+  actif                 Boolean  @default(true)
+  publieLe              DateTime @default(now())
+
+  @@unique([produitId, influenceurId])
+}
+
+// ============ CODE PROMO ============
+// La réduction est toujours prélevée sur la Marge_Influenceur du produit concerné,
+// jamais sur le Prix_Grossiste (Marchand) ni sur la Commission_BrandShip.
+model CodePromo {
+  id             String   @id @default(uuid())
+  influenceurId  String
+  influenceur    Influenceur @relation(fields: [influenceurId], references: [id])
+  code           String   @unique
+  typeReduction  String   // POURCENTAGE | MONTANT_FIXE
+  valeur         Float
+  dateDebut      DateTime
+  dateFin        DateTime?
+  utilisationsMax Int?
+  utilisationsActuelles Int @default(0)
+}
+
+// ============ CODE D'AVOIR (remboursement suite à un retour) ============
+// Généré par le Marchand suite à un retour validé, au lieu d'un remboursement
+// cash. Utilisable par le client concerné sur un prochain achat de la MÊME
+// marque (marchandId), chez n'importe quel Influenceur qui la revend.
+model CodeAvoir {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  marchandId    String
+  marchand      Marchand @relation(fields: [marchandId], references: [id])
+  clientId      String
+  client        User     @relation(fields: [clientId], references: [id])
+  commandeOrigineId String  // commande liée au retour
+  motifRetour   String
+  montant       Float
+  statut        String   @default("NON_UTILISE") // NON_UTILISE | UTILISE | EXPIRE
+  dateExpiration DateTime?
+  utiliseSurCommandeId String?
+  createdAt     DateTime @default(now())
+}
+
+// ============ LIVREUR ============
+model Livreur {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id])
+  zoneCouverte      String   // ex: "Cocody, Angré"
+  vehicule          String?  // moto, voiture, tricycle
+  statutAbonnement  String   @default("ESSAI_GRATUIT") // ESSAI_GRATUIT | ACTIF | INACTIF
+  dateInscription   DateTime @default(now())
+  prochaineEcheance DateTime // fin de l'essai gratuit, puis +30 jours à chaque renouvellement
+  livraisons        Livraison[]
+  tarifs            TarifLivraison[]
+  abonnements       AbonnementLivreur[]
+}
+
+// Historique des paiements d'abonnement mensuel du Livreur (10 000 FCFA/mois,
+// premier mois offert mais qui active le renouvellement du mois suivant)
+model AbonnementLivreur {
+  id           String   @id @default(uuid())
+  livreurId    String
+  livreur      Livreur  @relation(fields: [livreurId], references: [id])
+  periodeDebut DateTime
+  periodeFin   DateTime
+  montant      Float    // 0 pour le mois offert, sinon le tarif en vigueur
+  estEssaiGratuit Boolean @default(false)
+  statutPaiement String  @default("EN_ATTENTE") // EN_ATTENTE | PAYE | ECHOUE
+  payeLe       DateTime?
+}
+
+// Grille tarifaire définie par chaque Livreur, visible par les Marchands
+model TarifLivraison {
+  id          String   @id @default(uuid())
+  livreurId   String
+  livreur     Livreur  @relation(fields: [livreurId], references: [id])
+  ville       String   // ex: "Abidjan"
+  commune     String   // ex: "Cocody"
+  quartier    String?  // ex: "Angré", optionnel pour affiner le tarif
+  montant     Float    // FCFA
+  actif       Boolean  @default(true)
+
+  @@unique([livreurId, ville, commune, quartier])
+}
+
+// ============ COMMANDE ============
 enum StatutCommande {
   EN_ATTENTE_PAIEMENT
   PAYEE
@@ -37,11 +224,110 @@ enum StatutCommande {
   REMBOURSEE
 }
 
-enum TypeConversation {
-  CLIENT_INFLUENCEUR
-  INFLUENCEUR_MARCHAND
+model Commande {
+  id                    String   @id @default(uuid())
+  clientId              String
+  client                User     @relation(fields: [clientId], references: [id])
+  marchandId            String
+  marchand              Marchand @relation(fields: [marchandId], references: [id])
+  boutiqueProduitId     String
+  influenceurId         String   // pour traçabilité de la commission
+  codePromoId           String?
+
+  quantite              Int
+  prixGrossiste         Float
+  commissionBrandShip   Float
+  margeInfluenceurFCFA  Float
+  fraisLivraison        Float
+  montantTotal          Float
+
+  statut                StatutCommande @default(EN_ATTENTE_PAIEMENT)
+  dateLivraison         DateTime?
+  dateFinSequestre       DateTime?     // dateLivraison + 10 jours
+  transactionPaiementId String?
+
+  livraison             Livraison?
+  createdAt             DateTime @default(now())
 }
 
+// ============ LIVRAISON ============
+model Livraison {
+  id           String   @id @default(uuid())
+  commandeId   String   @unique
+  commande     Commande @relation(fields: [commandeId], references: [id])
+  livreurId    String
+  livreur      Livreur  @relation(fields: [livreurId], references: [id])
+  statut       String   @default("ASSIGNEE") // ASSIGNEE | RECUPEREE | EN_COURS | LIVREE | ECHEC
+  preuveUrl    String?  // photo ou signature
+  codeOTP      String?
+  livreLe      DateTime?
+}
+
+// ============ TRANSACTION MOBILE MONEY ============
+model Transaction {
+  id                 String   @id @default(uuid())
+  commandeId         String
+  operateur          String   // ORANGE_MONEY | WAVE | MTN_MOMO | MOOV_MONEY
+  agregateur         String   // CINETPAY | PAYDUNYA | ELYONPAY
+  reference          String   @unique
+  montant            Float
+  statut             String   // INITIEE | REUSSIE | ECHOUEE
+  webhookRecu        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+}
+
+// ============ WALLET (portefeuille interne) ============
+model Wallet {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  soldeDisponible  Float    @default(0)
+  soldeEnSequestre Float    @default(0)
+  retraits         Retrait[]
+}
+
+// Un retrait n'est autorisé que si User.niveauVerification satisfait le plafond
+// applicable (voir 9.4) : TELEPHONE_VERIFIE suffit sous le plafond configuré,
+// IDENTITE_VERIFIEE est requis au-delà.
+model Retrait {
+  id           String   @id @default(uuid())
+  walletId     String
+  wallet       Wallet   @relation(fields: [walletId], references: [id])
+  montant      Float
+  operateur    String
+  numeroCible  String
+  statut       String   @default("EN_ATTENTE") // EN_ATTENTE | TRAITE | ECHOUE
+  createdAt    DateTime @default(now())
+}
+
+// ============ PARAMÈTRES PLATEFORME (Admin ajustable) ============
+model ParametrePlateforme {
+  id                        String  @id @default(uuid())
+  tauxCommissionBrandShip   Float   @default(0.02)
+  montantParrainage         Float   @default(50)
+  delaiSequestreJours       Int     @default(10)
+  seuilBeneficeCommission   Float   @default(5000)   // 1er palier en FCFA
+  seuilBeneficeTauxSupplementaire Float @default(10000) // au-delà : +1%
+  commissionVenteBasse      Float   @default(200)   // si bénéfice < seuil bas
+  commissionVenteHaute      Float   @default(500)   // si seuil bas ≤ bénéfice ≤ seuil haut
+  tauxSupplementaireHauteMarge Float @default(0.01) // 1% au-delà du seuil haut, ajouté au forfait
+  delaiGraceReversementHeures Int   @default(48)     // avant suspension auto
+  nbEchecsTolereAvantSuspension Int @default(3)
+  montantAbonnementLivreur  Float   @default(10000) // FCFA/mois
+  dureeEssaiGratuitJours    Int     @default(30)     // 1er mois offert
+  scoreConfianceSeuilModeDirect Int @default(20)     // ex: 20 commandes validées sans litige
+  montantDepotGarantieDefaut Float  @default(0)      // 0 = pas de dépôt exigé par défaut
+  partPlateformePub         Float   @default(0.25)   // 25% du pack encaissé immédiatement par BrandShip
+  partBudgetDiffusionPub    Float   @default(0.75)   // 75% réservés au Budget_Diffusion View-to-Pay
+  tauxParVueQualifiante     Float   @default(1)       // 1 FCFA par vue qualifiante
+  dureeMinVueQualifianteSecondes Int @default(15)     // seuil de visionnage pour compter une vue
+  montantGainVisiteurParVue Float   @default(0.5)     // rétribution créditée au visiteur connecté par vue qualifiante
+  plafondRetraitSansIdentite Float  @default(2000)    // au-delà : IDENTITE_VERIFIEE requise pour retirer
+  versionActive             Boolean @default(true)
+  effectifDepuis            DateTime @default(now())
+}
+
+// ============ LIVE SHOPPING MULTI-PLATEFORME ============
 enum ReseauLive {
   YOUTUBE
   FACEBOOK
@@ -49,642 +335,188 @@ enum ReseauLive {
   INSTAGRAM
 }
 
+model SessionLive {
+  id                        String   @id @default(uuid())
+  influenceurId             String
+  influenceur               Influenceur @relation(fields: [influenceurId], references: [id])
+  titre                     String
+  statut                    String   @default("PLANIFIEE") // PLANIFIEE | EN_DIRECT | TERMINEE | ANNULEE
+  modeRotationOverlay       String   @default("AUTO") // AUTO | MANUEL
+  intervalleRotationSecondes Int     @default(60) // si mode AUTO
+  produitOverlayActuelId    String?  // produit actuellement affiché dans le bandeau (mode manuel ou auto)
+  dateDebut                 DateTime?
+  dateFin                   DateTime?
+  produits                  ProduitSessionLive[]
+  connexions                ConnexionReseauLive[]
+  createdAt                 DateTime @default(now())
+}
+
+// Produits mis en avant pendant la session (issus de la boutique de l'influenceur)
+model ProduitSessionLive {
+  id                String   @id @default(uuid())
+  sessionId         String
+  session           SessionLive @relation(fields: [sessionId], references: [id])
+  boutiqueProduitId String
+  ordreAffichage    Int      @default(0)
+  ventesGenerees    Int      @default(0)
+  caGenere          Float    @default(0)
+}
+
+// Statut de connexion par réseau social pour une session donnée
+model ConnexionReseauLive {
+  id           String   @id @default(uuid())
+  sessionId    String
+  session      SessionLive @relation(fields: [sessionId], references: [id])
+  reseau       ReseauLive
+  statut       String   @default("DECONNECTE") // CONNECTE | DECONNECTE | ERREUR
+  tokenOAuthId String   // référence au jeton OAuth stocké de façon sécurisée (jamais en clair)
+  picSpectateurs Int?    // si fourni par l'API du réseau
+  derniereErreur String?
+}
+
+// ============ MODULE PUBLICITAIRE (Ad Manager) ============
 enum TypeAnnonceur {
   MARCHAND
   INFLUENCEUR
 }
 
-// ============================================================
-// UTILISATEURS
-// ============================================================
-
-model User {
-  id                  String             @id @default(uuid())
-  email               String             @unique
-  telephone           String             @unique
-  passwordHash        String
-  role                Role
-  nomComplet          String
-  statut              String             @default("ACTIF") // ACTIF | SUSPENDU | EN_ATTENTE_KYC
-  enLigne             Boolean            @default(false)
-  derniereConnexion   DateTime           @default(now())
-  niveauVerification  String             @default("NON_VERIFIE") // NON_VERIFIE | TELEPHONE_VERIFIE | IDENTITE_VERIFIEE
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-
-  // Relations
-  marchand            Marchand?
-  influenceur         Influenceur?
-  livreur             Livreur?
-  wallet              Wallet?
-  codesAvoir          CodeAvoir[]
-  messagesEnvoyes     Message[]          @relation("UserMessages")
-  ticketsSupport      TicketSupport[]    @relation("UserTickets")
-  clicsPublicitaires  ClicPublicitaire[] @relation("UserClics")
-  conversations       Conversation[]     @relation("UserConversations")
-  commandes           Commande[]         @relation("UserCommandes")
-
-  @@map("users")
-}
-
-// ============================================================
-// MARCHAND
-// ============================================================
-
-model Marchand {
-  id                        String             @id @default(uuid())
-  userId                    String             @unique
-  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  nomEntreprise             String
-  rccm                      String?
-  kycValide                 Boolean            @default(false)
-  modeEncaissement          String             @default("SEQUESTRE_PLATEFORME") // SEQUESTRE_PLATEFORME | DIRECT
-  scoreConfiance            Int                @default(0)
-  depotGarantieMontant      Float              @default(0)
-  depotGarantieStatut       String             @default("AUCUN") // AUCUN | VERSE | PARTIELLEMENT_CONSOMME | RESTITUE
-  statutReversement         String             @default("A_JOUR") // A_JOUR | SUSPENDU
-  nbEchecsReversementCumules Int               @default(0)
-  suspenduLe                DateTime?
-  createdAt                 DateTime           @default(now())
-  updatedAt                 DateTime           @updatedAt
-
-  produits                  Produit[]
-  commandes                 Commande[]
-  codesAvoir                CodeAvoir[]
-  reversements              Reversement[]
-  packsSMS                  PackSMS[]
-
-  @@map("marchands")
-}
-
-// ============================================================
-// INFLUENCEUR
-// ============================================================
-
-model Influenceur {
-  id                       String             @id @default(uuid())
-  userId                   String             @unique
-  user                     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  nomBoutique              String
-  slug                     String             @unique
-  logoUrl                  String?
-  themeCouleur             String             @default("orange")
-  margeParDefaut           Float              @default(0)
-  typeMargeParDefaut       String             @default("FIXE") // FIXE | POURCENTAGE
-  codeParrainage           String             @unique
-  parrainId                String?            // auto-référence
-
-  boutiqueProduits         BoutiqueProduit[]
-  codesPromo               CodePromo[]
-  sessionsLive             SessionLive[]
-  campagnesPublicitaires   CampagnePublicitaire[] @relation("CampagneInfluenceur")
-
-  @@map("influenceurs")
-}
-
-// ============================================================
-// LIVREUR
-// ============================================================
-
-model Livreur {
-  id                   String             @id @default(uuid())
-  userId               String             @unique
-  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  zoneCouverte         String             // ex: "Cocody, Angré, Yopougon"
-  vehicule             String?            // moto, voiture, tricycle
-  statutAbonnement     String             @default("ESSAI_GRATUIT") // ESSAI_GRATUIT | ACTIF | INACTIF
-  dateInscription      DateTime           @default(now())
-  prochaineEcheance    DateTime
-
-  tarifs               TarifLivraison[]
-  abonnements          AbonnementLivreur[]
-  livraisons           Livraison[]
-
-  @@map("livreurs")
-}
-
-// ============================================================
-// ABONNEMENT LIVREUR
-// ============================================================
-
-model AbonnementLivreur {
-  id               String   @id @default(uuid())
-  livreurId        String
-  livreur          Livreur  @relation(fields: [livreurId], references: [id], onDelete: Cascade)
-  periodeDebut     DateTime
-  periodeFin       DateTime
-  montant          Float    // 0 pour le mois offert
-  estEssaiGratuit  Boolean  @default(false)
-  statutPaiement   String   @default("EN_ATTENTE") // EN_ATTENTE | PAYE | ECHOUE
-  payeLe           DateTime?
-  createdAt        DateTime @default(now())
-
-  @@map("abonnements_livreur")
-}
-
-// ============================================================
-// TARIF LIVRAISON (défini par le livreur)
-// ============================================================
-
-model TarifLivraison {
-  id           String   @id @default(uuid())
-  livreurId    String
-  livreur      Livreur  @relation(fields: [livreurId], references: [id], onDelete: Cascade)
-  ville        String   // ex: "Abidjan"
-  commune      String   // ex: "Cocody"
-  quartier     String?  // ex: "Angré"
-  montant      Float    // FCFA
-  actif        Boolean  @default(true)
-
-  @@unique([livreurId, ville, commune, quartier])
-  @@map("tarifs_livraison")
-}
-
-// ============================================================
-// PRODUIT (catalogue Marchand - privé)
-// ============================================================
-
-model Produit {
-  id               String             @id @default(uuid())
-  marchandId       String
-  marchand         Marchand           @relation(fields: [marchandId], references: [id], onDelete: Cascade)
-  nom              String
-  description      String
-  prixGrossiste    Float
-  stock            Int
-  images           String[] // URLs
-  statut           String   @default("BROUILLON") // BROUILLON | PUBLIE_INFLUENCEURS | RUPTURE
-  visibilite       String   @default("TOUS")      // TOUS | ASSIGNE
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  assignations     ProductAssignment[]
-  boutiqueProduits BoutiqueProduit[]
-
-  @@map("produits")
-}
-
-// ============================================================
-// ASSIGNATION PRODUIT (ciblage influenceur)
-// ============================================================
-
-model ProductAssignment {
-  id             String   @id @default(uuid())
-  produitId      String
-  produit        Produit  @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  influenceurId  String
-  influenceur    Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
-  assignedAt     DateTime @default(now())
-
-  @@unique([produitId, influenceurId])
-  @@map("product_assignments")
-}
-
-// ============================================================
-// BOUTIQUE PRODUIT (produit publié par un influenceur)
-// ============================================================
-
-model BoutiqueProduit {
-  id                 String     @id @default(uuid())
-  produitId          String
-  produit            Produit    @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  influenceurId      String
-  influenceur        Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
-  typeMarge          String     // FIXE | POURCENTAGE
-  valeurMarge        Float
-  prixFinalCalcule   Float      // recalculé à chaque changement
-  actif              Boolean    @default(true)
-  publieLe           DateTime   @default(now())
-
-  commandes          Commande[]
-  sessionsLive       ProduitSessionLive[]
-
-  @@unique([produitId, influenceurId])
-  @@map("boutique_produits")
-}
-
-// ============================================================
-// CODE PROMO (influenceur)
-// ============================================================
-
-model CodePromo {
-  id                   String   @id @default(uuid())
-  influenceurId        String
-  influenceur          Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
-  code                 String   @unique
-  typeReduction        String   // POURCENTAGE | MONTANT_FIXE
-  valeur               Float
-  dateDebut            DateTime
-  dateFin              DateTime?
-  utilisationsMax      Int?
-  utilisationsActuelles Int     @default(0)
-
-  commandes            Commande[]
-
-  @@map("codes_promo")
-}
-
-// ============================================================
-// CODE AVOIR (remboursement marchand)
-// ============================================================
-
-model CodeAvoir {
-  id                 String   @id @default(uuid())
-  code               String   @unique
-  marchandId         String
-  marchand           Marchand @relation(fields: [marchandId], references: [id], onDelete: Cascade)
-  clientId           String
-  client             User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  commandeOrigineId  String
-  motifRetour        String
-  montant            Float
-  statut             String   @default("NON_UTILISE") // NON_UTILISE | UTILISE | EXPIRE
-  dateExpiration     DateTime?
-  utiliseSurCommandeId String?
-  createdAt          DateTime @default(now())
-
-  @@map("codes_avoir")
-}
-
-// ============================================================
-// COMMANDE
-// ============================================================
-
-model Commande {
-  id                   String         @id @default(uuid())
-  clientId             String
-  client               User           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  marchandId           String
-  marchand             Marchand       @relation(fields: [marchandId], references: [id], onDelete: Cascade)
-  boutiqueProduitId    String
-  boutiqueProduit      BoutiqueProduit @relation(fields: [boutiqueProduitId], references: [id])
-  influenceurId        String
-  codePromoId          String?
-  codePromo            CodePromo?     @relation(fields: [codePromoId], references: [id])
-  codeAvoirId          String?
-  codeAvoir            CodeAvoir?     @relation(fields: [codeAvoirId], references: [id])
-
-  quantite             Int
-  prixGrossiste        Float
-  commissionBrandShip  Float
-  margeInfluenceurFCFA Float
-  fraisLivraison       Float
-  montantTotal         Float
-
-  statut               StatutCommande @default(EN_ATTENTE_PAIEMENT)
-  dateLivraison        DateTime?
-  dateFinSequestre     DateTime?
-  transactionPaiementId String?
-
-  livraison            Livraison?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-
-  reversements         Reversement[]
-  ticketsSupport       TicketSupport[]
-
-  @@map("commandes")
-}
-
-// ============================================================
-// LIVRAISON
-// ============================================================
-
-model Livraison {
-  id           String   @id @default(uuid())
-  commandeId   String   @unique
-  commande     Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
-  livreurId    String
-  livreur      Livreur  @relation(fields: [livreurId], references: [id], onDelete: Cascade)
-  statut       String   @default("ASSIGNEE") // ASSIGNEE | RECUPEREE | EN_COURS | LIVREE | ECHEC
-  preuveUrl    String?  // photo ou signature
-  codeOTP      String?
-  livreLe      DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("livraisons")
-}
-
-// ============================================================
-// TRANSACTION (Mobile Money)
-// ============================================================
-
-model Transaction {
-  id           String   @id @default(uuid())
-  commandeId   String
-  commande     Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
-  operateur    String   // ORANGE_MONEY | WAVE | MTN_MOMO | MOOV_MONEY
-  agregateur   String   // CINETPAY | PAYDUNYA | ELYONPAY
-  reference    String   @unique
-  montant      Float
-  statut       String   // INITIEE | REUSSIE | ECHOUEE
-  webhookRecu  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-
-  @@map("transactions")
-}
-
-// ============================================================
-// REVERSEMENT (suivi des sommes dues par le Marchand)
-// ============================================================
-
-model Reversement {
-  id                String   @id @default(uuid())
-  marchandId        String
-  marchand          Marchand @relation(fields: [marchandId], references: [id], onDelete: Cascade)
-  commandeId        String   @unique
-  commande          Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
-  beneficiaireType  String   // BRANDSHIP | INFLUENCEUR | LIVREUR | PARRAIN
-  beneficiaireId    String
-  montant           Float
-  statut            String   @default("A_VENIR") // A_VENIR | EN_COURS | REUSSI | ECHOUE
-  dateEcheance      DateTime
-  dateTraitement    DateTime?
-  nbTentatives      Int      @default(0)
-  motifEchec        String?
-  createdAt         DateTime @default(now())
-
-  @@map("reversements")
-}
-
-// ============================================================
-// WALLET (portefeuille interne)
-// ============================================================
-
-model Wallet {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  soldeDisponible   Float    @default(0)
-  soldeEnSequestre  Float    @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  retraits          Retrait[]
-
-  @@map("wallets")
-}
-
-// ============================================================
-// RETRAIT
-// ============================================================
-
-model Retrait {
-  id           String   @id @default(uuid())
-  walletId     String
-  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  montant      Float
-  operateur    String
-  numeroCible  String
-  statut       String   @default("EN_ATTENTE") // EN_ATTENTE | TRAITE | ECHOUE
-  createdAt    DateTime @default(now())
-
-  @@map("retraits")
-}
-
-// ============================================================
-// PARAMETRES PLATEFORME (Admin ajustable)
-// ============================================================
-
-model ParametrePlateforme {
-  id                                      String  @id @default(uuid())
-  tauxCommissionBrandShip                 Float   @default(0.02)
-  montantParrainage                       Float   @default(50)
-  delaiSequestreJours                     Int     @default(10)
-  seuilBeneficeCommission                 Float   @default(5000)
-  seuilBeneficeTauxSupplementaire         Float   @default(10000)
-  commissionVenteBasse                    Float   @default(200)
-  commissionVenteHaute                    Float   @default(500)
-  tauxSupplementaireHauteMarge            Float   @default(0.01)
-  delaiGraceReversementHeures             Int     @default(48)
-  nbEchecsTolereAvantSuspension           Int     @default(3)
-  montantAbonnementLivreur                Float   @default(10000)
-  dureeEssaiGratuitJours                  Int     @default(30)
-  scoreConfianceSeuilModeDirect           Int     @default(20)
-  montantDepotGarantieDefaut              Float   @default(0)
-  partPlateformePub                       Float   @default(0.25)
-  partBudgetDiffusionPub                  Float   @default(0.75)
-  tauxParVueQualifiante                   Float   @default(1)
-  dureeMinVueQualifianteSecondes          Int     @default(15)
-  montantGainVisiteurParVue               Float   @default(0.5)
-  plafondRetraitSansIdentite              Float   @default(2000)
-  versionActive                           Boolean @default(true)
-  effectifDepuis                          DateTime @default(now())
-
-  @@map("parametres_plateforme")
-}
-
-// ============================================================
-// LIVE SHOPPING
-// ============================================================
-
-model SessionLive {
-  id                          String     @id @default(uuid())
-  influenceurId               String
-  influenceur                 Influenceur @relation(fields: [influenceurId], references: [id], onDelete: Cascade)
-  titre                       String
-  statut                      String     @default("PLANIFIEE") // PLANIFIEE | EN_DIRECT | TERMINEE | ANNULEE
-  modeRotationOverlay         String     @default("AUTO") // AUTO | MANUEL
-  intervalleRotationSecondes  Int        @default(60)
-  produitOverlayActuelId      String?
-  dateDebut                   DateTime?
-  dateFin                     DateTime?
-  createdAt                   DateTime   @default(now())
-
-  produits                    ProduitSessionLive[]
-  connexions                  ConnexionReseauLive[]
-
-  @@map("sessions_live")
-}
-
-model ProduitSessionLive {
-  id                String     @id @default(uuid())
-  sessionId         String
-  session           SessionLive @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  boutiqueProduitId String
-  boutiqueProduit   BoutiqueProduit @relation(fields: [boutiqueProduitId], references: [id])
-  ordreAffichage    Int        @default(0)
-  ventesGenerees    Int        @default(0)
-  caGenere          Float      @default(0)
-
-  @@map("produits_session_live")
-}
-
-model ConnexionReseauLive {
-  id                String     @id @default(uuid())
-  sessionId         String
-  session           SessionLive @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  reseau            ReseauLive
-  statut            String     @default("DECONNECTE") // CONNECTE | DECONNECTE | ERREUR
-  tokenOAuthId      String     // référence au jeton OAuth stocké de façon sécurisée
-  picSpectateurs    Int?
-  derniereErreur    String?
-  createdAt         DateTime   @default(now())
-
-  @@map("connexions_reseau_live")
-}
-
-// ============================================================
-// MODULE PUBLICITAIRE (Ad Manager)
-// ============================================================
-
+// Catalogue des packs vendus (configurable par l'Admin, ex. Bronze/Argent/Or)
 model PackPublicitaire {
-  id              String     @id @default(uuid())
-  nom             String
-  dureeJours      Int
-  emplacement     String     // BANNIERE_ACCUEIL | BANNIERE_CATEGORIE | RESULTATS_SPONSORISES
-  prix            Float
-  poidsRotation   Int        @default(1) // priorité
-  actif           Boolean    @default(true)
-  createdAt       DateTime   @default(now())
-
+  id              String   @id @default(uuid())
+  nom             String   // ex: "Pack Or"
+  dureeJours      Int      // durée maximale — la diffusion peut s'arrêter avant si le budget est épuisé
+  emplacement     String   // BANNIERE_ACCUEIL | BANNIERE_CATEGORIE | RESULTATS_SPONSORISES
+  prix            Float    // FCFA
+  poidsRotation   Int      @default(1) // priorité dans la rotation (Or > Argent > Bronze)
+  actif           Boolean  @default(true)
   campagnes       CampagnePublicitaire[]
-
-  @@map("packs_publicitaires")
 }
 
 model CampagnePublicitaire {
-  id                        String           @id @default(uuid())
-  typeAnnonceur             TypeAnnonceur
-  marchandId                String?
-  marchand                  Marchand?        @relation(fields: [marchandId], references: [id], onDelete: SetNull)
-  influenceurId             String?
-  influenceur               Influenceur?     @relation(fields: [influenceurId], references: [id], onDelete: SetNull)
-  packId                    String
-  pack                      PackPublicitaire @relation(fields: [packId], references: [id])
-  objectif                  String           // VISIBILITE_BOUTIQUE | VISIBILITE_PRODUIT
-  produitCibleId            String?
-  visuelUrl                 String
-  statutModeration          String           @default("EN_ATTENTE") // EN_ATTENTE | APPROUVE | REJETE
-  dateDebut                 DateTime
-  dateFin                   DateTime
-  montantPaye               Float
-  recettePlateformeImmediate Float            // 25%
-  budgetDiffusionInitial    Float            // 75%
-  budgetDiffusionRestant    Float
-  nbVuesQualifiantes        Int              @default(0)
-  impressions               Int              @default(0)
-  clics                     Int              @default(0)
-  statutDiffusion           String           @default("EN_DIFFUSION") // EN_DIFFUSION | ARRETEE_BUDGET_EPUISE | ARRETEE_DUREE_ECOULEE | ARRETEE_MANUELLE
-  createdAt                 DateTime         @default(now())
-
-  clicsDetail               ClicPublicitaire[]
-
-  @@map("campagnes_publicitaires")
+  id                  String   @id @default(uuid())
+  typeAnnonceur       TypeAnnonceur
+  marchandId          String?
+  influenceurId       String?
+  packId              String
+  pack                PackPublicitaire @relation(fields: [packId], references: [id])
+  objectif            String   // VISIBILITE_BOUTIQUE | VISIBILITE_PRODUIT
+  produitCibleId      String?
+  visuelUrl           String
+  statutModeration    String   @default("EN_ATTENTE") // EN_ATTENTE | APPROUVE | REJETE
+  dateDebut           DateTime
+  dateFin             DateTime // durée max prévue par le pack (voir 9.2)
+  montantPaye         Float
+  recettePlateformeImmediate Float // 25% de montantPaye, encaissé à l'achat
+  budgetDiffusionInitial     Float // 75% de montantPaye, réservé à la diffusion
+  budgetDiffusionRestant     Float // décrémenté de 1 FCFA par vue qualifiante (clic + 15s)
+  nbVuesQualifiantes  Int      @default(0) // clics ayant atteint 15s de visionnage — seuls ceux-ci sont facturés
+  impressions         Int      @default(0) // affichages bruts de la bannière, avant tout clic
+  clics               Int      @default(0) // total des clics, qu'ils atteignent 15s ou non
+  statutDiffusion     String   @default("EN_DIFFUSION") // EN_DIFFUSION | ARRETEE_BUDGET_EPUISE | ARRETEE_DUREE_ECOULEE | ARRETEE_MANUELLE
+  createdAt           DateTime @default(now())
+  clicsDetail         ClicPublicitaire[]
 }
 
+// Traçabilité individuelle de chaque clic, pour dédupliquer et vérifier
+// la règle "clic + 15s" avant de décrémenter le Budget_Diffusion
 model ClicPublicitaire {
-  id                         String   @id @default(uuid())
-  campagneId                 String
-  campagne                   CampagnePublicitaire @relation(fields: [campagneId], references: [id], onDelete: Cascade)
-  visiteurRef                String   // identifiant de session anonymisé
-  visiteurUserId             String?
-  visiteurUser               User?    @relation(fields: [visiteurUserId], references: [id], onDelete: SetNull)
-  cliqueLe                   DateTime @default(now())
-  dureeVisionnageSecondes    Int      @default(0)
-  estQualifiante             Boolean  @default(false)
-  montantGagneVisiteur       Float    @default(0)
-
-  @@map("clics_publicitaires")
+  id             String   @id @default(uuid())
+  campagneId     String
+  campagne       CampagnePublicitaire @relation(fields: [campagneId], references: [id])
+  visiteurRef    String   // identifiant de session/visiteur (anonymisé), pour la déduplication
+  visiteurUserId String?  // renseigné uniquement si le visiteur est connecté — condition pour créditer un gain
+  visiteurUser   User?    @relation(fields: [visiteurUserId], references: [id])
+  cliqueLe       DateTime @default(now())
+  dureeVisionnageSecondes Int  @default(0) // mis à jour tant que le visiteur reste sur la page
+  estQualifiante Boolean  @default(false)  // passe à true dès que dureeVisionnageSecondes ≥ 15
+  montantGagneVisiteur Float @default(0)   // crédité au wallet de visiteurUser si connecté et vue qualifiante
 }
 
-// ============================================================
-// PACK SMS (Marchand)
-// ============================================================
+// Journal des vues qualifiantes, pour audit et déduplication par session
+model VueQualifianteCampagne {
+  id            String   @id @default(uuid())
+  campagneId    String
+  visiteurId    String?  // session anonyme ou userId si connecté, pour dédupliquer
+  dureeVueSecondes Int   // ≥ 15 pour être qualifiante
+  facturee      Boolean  @default(false) // false si dédupliquée (déjà comptée dans la fenêtre de temps)
+  vueLe         DateTime @default(now())
+}
 
+// ============ PACK SMS (Marchand) ============
 model PackSMS {
-  id               String   @id @default(uuid())
-  marchandId       String
-  marchand         Marchand @relation(fields: [marchandId], references: [id], onDelete: Cascade)
-  operateur        String   // ORANGE_CI_BUSINESS | MTN_SMS_PRO | MOOV_SMS
-  creditsAchetes   Int
-  creditsRestants  Int
-  montantPaye      Float
-  createdAt        DateTime @default(now())
-
-  envois           EnvoiSMS[]
-
-  @@map("packs_sms")
+  id              String   @id @default(uuid())
+  marchandId      String
+  marchand        Marchand @relation(fields: [marchandId], references: [id])
+  operateur       String   // ORANGE_CI_BUSINESS | MTN_SMS_PRO | MOOV_SMS
+  creditsAchetes  Int
+  creditsRestants Int
+  montantPaye     Float
+  createdAt       DateTime @default(now())
+  envois          EnvoiSMS[]
 }
 
 model EnvoiSMS {
   id           String   @id @default(uuid())
   packId       String
-  pack         PackSMS  @relation(fields: [packId], references: [id], onDelete: Cascade)
-  destinataire String
+  pack         PackSMS  @relation(fields: [packId], references: [id])
+  destinataire String   // numéro de téléphone client
   contenu      String
   type         String   // TRANSACTIONNEL | MARKETING
   statut       String   @default("ENVOYE") // ENVOYE | DELIVRE | ECHOUE
   envoyeLe     DateTime @default(now())
-
-  @@map("envois_sms")
 }
 
-// ============================================================
-// MESSAGERIE (Chat)
-// ============================================================
+// ============ MESSAGERIE (Chat type Alibaba) ============
+enum TypeConversation {
+  CLIENT_INFLUENCEUR
+  INFLUENCEUR_MARCHAND
+}
 
 model Conversation {
-  id                 String             @id @default(uuid())
+  id                 String   @id @default(uuid())
   type               TypeConversation
-  participantAId     String
-  participantBId     String
-  produitContexteId  String?
-  commandeContexteId String?
-  derniereActivite   DateTime           @default(now())
-  createdAt          DateTime           @default(now())
-
+  participantAId     String   // ex: clientId ou influenceurId
+  participantBId     String   // ex: influenceurId ou marchandId
+  produitContexteId  String?  // fiche produit à l'origine de la conversation, si applicable
+  commandeContexteId String?  // pour rattacher au dossier de litige si besoin
+  derniereActivite   DateTime @default(now())
   messages           Message[]
-
-  @@map("conversations")
 }
 
 model Message {
-  id               String       @id @default(uuid())
-  conversationId   String
-  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  auteurId         String
-  auteur           User         @relation(fields: [auteurId], references: [id], onDelete: Cascade)
-  contenu          String
-  pieceJointeUrl   String?
-  statut           String       @default("ENVOYE") // ENVOYE | RECU | LU
-  envoyeLe         DateTime     @default(now())
-
-  @@map("messages")
+  id             String   @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  auteurId       String
+  auteur         User     @relation(fields: [auteurId], references: [id])
+  contenu        String
+  pieceJointeUrl String?
+  statut         String   @default("ENVOYE") // ENVOYE | RECU | LU
+  envoyeLe       DateTime @default(now())
 }
 
-// ============================================================
-// SUPPORT (Nous contacter)
-// ============================================================
-
+// ============ SUPPORT ("Nous contacter") ============
 model TicketSupport {
-  id               String           @id @default(uuid())
-  numero           String           @unique
-  auteurId         String
-  auteur           User             @relation(fields: [auteurId], references: [id], onDelete: Cascade)
-  motif            String           // PAIEMENT | LIVRAISON | LITIGE_COMMANDE | COMPTE | BOUTIQUE | AUTRE
-  commandeId       String?
-  commande         Commande?        @relation(fields: [commandeId], references: [id], onDelete: SetNull)
-  message          String
-  pieceJointeUrl   String?
-  statut           String           @default("NOUVEAU") // NOUVEAU | EN_COURS | RESOLU
-  agentAssigneId   String?
-  createdAt        DateTime         @default(now())
-  resoluLe         DateTime?
-
-  reponses         MessageTicket[]
-
-  @@map("tickets_support")
+  id              String   @id @default(uuid())
+  numero          String   @unique // ex: "TCK-2026-00042", affiché à l'utilisateur
+  auteurId        String
+  auteur          User     @relation(fields: [auteurId], references: [id])
+  motif           String   // PAIEMENT | LIVRAISON | LITIGE_COMMANDE | COMPTE | BOUTIQUE | AUTRE
+  commandeId      String?  // pré-rempli si ouvert depuis une commande
+  message         String
+  pieceJointeUrl  String?
+  statut          String   @default("NOUVEAU") // NOUVEAU | EN_COURS | RESOLU
+  agentAssigneId  String?
+  createdAt       DateTime @default(now())
+  resoluLe        DateTime?
+  reponses        MessageTicket[]
 }
 
 model MessageTicket {
-  id           String         @id @default(uuid())
+  id           String   @id @default(uuid())
   ticketId     String
-  ticket       TicketSupport  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  auteurId     String
+  ticket       TicketSupport @relation(fields: [ticketId], references: [id])
+  auteurId     String   // agent support ou utilisateur
   contenu      String
-  envoyeLe     DateTime       @default(now())
-
-  @@map("messages_ticket")
+  envoyeLe     DateTime @default(now())
 }
